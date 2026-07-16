@@ -30,6 +30,7 @@ public final class AppState {
     public static String pokerRoomJson(PokerRoomSnapshot room, String viewerId) {
         String normalizedViewerId = viewerId == null ? "" : viewerId.trim();
         boolean revealAllHoleCards = room.finished() && room.communityCards().size() >= 5;
+        boolean hideOtherChoices = shouldHideOtherChoices(room, normalizedViewerId);
         StringBuilder json = new StringBuilder("{\"tableId\":")
                 .append(room.tableId())
                 .append(",\"started\":")
@@ -74,6 +75,7 @@ public final class AppState {
                 json.append(',');
             }
             PokerRoomPlayer player = room.players().get(i);
+            PokerRoomPlayer visiblePlayer = visiblePlayer(room, player, normalizedViewerId, hideOtherChoices);
             String handName = "";
             List<String> bestCards = List.of();
             if (revealAllHoleCards) {
@@ -81,30 +83,65 @@ public final class AppState {
                 bestCards = player.folded() ? List.of() : PokerRoomService.bestHandCards(player.holeCards(), room.communityCards());
             }
             json.append("{\"id\":\"")
-                    .append(escapeJson(player.playerId()))
+                    .append(escapeJson(visiblePlayer.playerId()))
                     .append("\",\"ready\":")
-                    .append(player.ready())
+                    .append(visiblePlayer.ready())
                     .append(",\"folded\":")
-                    .append(player.folded())
+                    .append(visiblePlayer.folded())
                     .append(",\"chipsCommitted\":")
-                    .append(player.chipsCommitted())
+                    .append(visiblePlayer.chipsCommitted())
                     .append(",\"roundBet\":")
-                    .append(player.roundBet())
+                    .append(visiblePlayer.roundBet())
                     .append(",\"acted\":")
-                    .append(player.acted())
+                    .append(visiblePlayer.acted())
                     .append(",\"score\":")
-                    .append(player.score())
+                    .append(visiblePlayer.score())
                     .append(",\"handName\":\"")
                     .append(escapeJson(handName))
                     .append("\"")
                     .append(",\"bestCards\":")
                     .append(stringArrayJson(bestCards))
                     .append(",\"holeCards\":")
-                    .append(stringArrayJson(revealAllHoleCards || player.playerId().equals(normalizedViewerId) ? player.holeCards() : List.of()))
+                    .append(stringArrayJson(revealAllHoleCards || visiblePlayer.playerId().equals(normalizedViewerId) ? visiblePlayer.holeCards() : List.of()))
                     .append("}");
         }
         json.append("]}");
         return json.toString();
+    }
+
+    private static boolean shouldHideOtherChoices(PokerRoomSnapshot room, String viewerId) {
+        if (room.finished() || room.currentBet() <= 0) {
+            return false;
+        }
+        if (viewerId.isBlank()) {
+            return true;
+        }
+        PokerRoomPlayer viewer = room.players().stream()
+                .filter(player -> viewerId.equals(player.playerId()))
+                .findFirst()
+                .orElse(null);
+        return viewer != null
+                && !viewer.folded()
+                && !viewer.playerId().equals(room.currentAggressorId())
+                && viewer.roundBet() != room.currentBet();
+    }
+
+    private static PokerRoomPlayer visiblePlayer(PokerRoomSnapshot room, PokerRoomPlayer player, String viewerId, boolean hideOtherChoices) {
+        if (!hideOtherChoices
+                || player.playerId().equals(viewerId)
+                || player.playerId().equals(room.currentAggressorId())) {
+            return player;
+        }
+        return new PokerRoomPlayer(
+                player.playerId(),
+                player.ready(),
+                player.holeCards(),
+                false,
+                player.chipsCommitted() - player.roundBet(),
+                0,
+                false,
+                player.score() + player.roundBet()
+        );
     }
 
     public static String pokerTablesJson(List<PokerTableSummary> tables) {

@@ -736,6 +736,10 @@
     });
 
     backToLobbyButton.addEventListener("click", async () => {
+        if (currentPokerRoom?.started && !currentPokerRoom?.finished) {
+            pokerStatus.textContent = "游戏开始后不能回到大厅";
+            return;
+        }
         setBusy(backToLobbyButton, true);
         pokerStatus.textContent = "返回大厅中...";
 
@@ -829,6 +833,10 @@
     });
 
     leaveRoomButton.addEventListener("click", async () => {
+        if (currentPokerRoom?.started && !currentPokerRoom?.finished) {
+            pokerStatus.textContent = "游戏开始后不能离开房间";
+            return;
+        }
         setBusy(leaveRoomButton, true);
         pokerStatus.textContent = "离开房间中...";
 
@@ -850,14 +858,15 @@
     betButton.addEventListener("click", async () => {
         setBusy(betButton, true);
         setBusy(foldButton, true);
-        pokerStatus.textContent = "押注中...";
+        const actionName = currentPokerRoom?.currentBet > 0 ? "跟注" : "押注";
+        pokerStatus.textContent = `${actionName}中...`;
 
         try {
             await postForm("poker-room/bet", withTable({id: currentPlayerId, chips: betInput.value}));
             await refreshRoom();
             pokerStatus.textContent = "";
         } catch (error) {
-            pokerStatus.textContent = `押注失败: ${error.message}`;
+            pokerStatus.textContent = `${actionName}失败: ${error.message}`;
         } finally {
             updateActionControls(currentPokerRoom);
         }
@@ -1001,7 +1010,8 @@
         startRoomButton.classList.toggle("hidden", !inRoom || (!isHost && !room.finished));
         startRoomButton.textContent = room.finished ? "下一局" : "开始游戏";
         startRoomButton.disabled = room.finished ? !canStartNextHand : !room.canStart;
-        leaveRoomButton.classList.toggle("hidden", !inRoom);
+        leaveRoomButton.classList.toggle("hidden", !inRoom || (room.started && !room.finished));
+        backToLobbyButton.classList.toggle("hidden", room.started && !room.finished);
         updateActionControls(room);
 
         if (room.started && inRoom) {
@@ -1205,7 +1215,7 @@
             `当前押注：${room.currentBet || 0} 筹码`,
             `庄家：${room.dealerId || "无"}`,
             `本阶段主押：${room.currentAggressorId || "无"}`,
-            `当前行动：${room.currentTurnId || "无"}`,
+            `当前行动：${currentActionText(room)}`,
             room.winnerId ? `赢家：${room.winnerId}` : room.message || ""
         ].forEach(text => {
             const item = document.createElement("div");
@@ -1243,7 +1253,7 @@
             if (player.id === room.dealerId) {
                 labels.push("庄");
             }
-            if (player.id === room.currentTurnId) {
+            if (player.id === room.currentTurnId || (room.currentBet > 0 && canPlayerCall(room, player))) {
                 labels.push("行动");
             }
             name.textContent = labels.length > 0 ? `${player.id}（${labels.join(" / ")}）` : player.id;
@@ -1435,7 +1445,9 @@
             } else if (roundIndex === currentRoundIndex && aggressorId === room.currentAggressorId && room.currentBet > 0 && player.roundBet === room.currentBet) {
                 node.classList.add("done");
                 node.textContent = `${player.id} 已跟`;
-            } else if (roundIndex === currentRoundIndex && aggressorId === room.currentAggressorId && player.id === room.currentTurnId) {
+            } else if (roundIndex === currentRoundIndex
+                    && aggressorId === room.currentAggressorId
+                    && (player.id === room.currentTurnId || (player.id === currentPlayerId && canPlayerCall(room, player)))) {
                 node.classList.add("active");
                 node.textContent = `${player.id} 行动`;
             } else {
@@ -1478,13 +1490,43 @@
         return ids[(index + 1) % ids.length];
     }
 
+    function currentActionText(room) {
+        if (!room?.started || room.finished) {
+            return "无";
+        }
+        if (room.currentBet > 0) {
+            const pendingCount = (room.players || []).filter(player => canPlayerCall(room, player)).length;
+            return pendingCount > 0 ? `等待 ${pendingCount} 人跟注或弃牌` : "结算中";
+        }
+        return room.currentTurnId || room.currentAggressorId || "无";
+    }
+
+    function canPlayerCall(room, player) {
+        return Boolean(room?.currentBet > 0
+                && player
+                && !player.folded
+                && player.id !== room.currentAggressorId
+                && player.roundBet !== room.currentBet);
+    }
+
+    function canCurrentPlayerAct(room, currentPlayer) {
+        if (!room?.started || room.finished || !currentPlayer || currentPlayer.folded) {
+            return false;
+        }
+        if (room.currentBet > 0) {
+            return canPlayerCall(room, currentPlayer);
+        }
+        return room.currentTurnId === currentPlayerId;
+    }
+
     function updateActionControls(room) {
         const currentPlayer = room?.players?.find(player => player.id === currentPlayerId);
-        const canAct = Boolean(room?.started && !room.finished && currentPlayer && !currentPlayer.folded && room.currentTurnId === currentPlayerId);
+        const canAct = canCurrentPlayerAct(room, currentPlayer);
         betButton.disabled = !canAct;
         foldButton.disabled = !canAct;
         betInput.disabled = !canAct || room.currentBet > 0;
         betInput.value = room?.currentBet > 0 ? room.currentBet : Math.min(Math.max(Number(betInput.value) || 2, 2), 10);
+        betButton.textContent = room?.currentBet > 0 ? "跟注" : "押注";
 
         if (!room?.started) {
             actionStatus.textContent = "游戏开始后可以押注或弃牌";

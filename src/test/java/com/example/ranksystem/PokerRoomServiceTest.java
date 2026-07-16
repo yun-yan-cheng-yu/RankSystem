@@ -137,7 +137,7 @@ class PokerRoomServiceTest {
         roomService.bet("player-1", 4);
 
         PokerRoomSnapshot afterFirstBet = roomService.snapshot();
-        assertEquals("player-2", afterFirstBet.currentTurnId());
+        assertEquals("", afterFirstBet.currentTurnId());
         assertEquals(4, afterFirstBet.currentBet());
         assertEquals(8, afterFirstBet.pot());
         assertEquals(-6, scoreOf(afterFirstBet, "player-1"));
@@ -146,6 +146,7 @@ class PokerRoomServiceTest {
         roomService.bet("player-2", 4);
 
         PokerRoomSnapshot afterMatch = roomService.snapshot();
+        assertTrue(afterMatch.message().contains("跟注 4 筹码"));
         assertEquals(2, afterMatch.communityCards().size());
         assertEquals(0, afterMatch.currentBet());
         assertEquals(12, afterMatch.pot());
@@ -153,6 +154,53 @@ class PokerRoomServiceTest {
         assertEquals(-6, scoreOf(afterMatch, "player-2"));
         assertEquals("player-2", afterMatch.currentAggressorId());
         assertEquals("player-2", afterMatch.currentTurnId());
+    }
+
+    @Test
+    void callersCanActWithoutFollowingRoomOrder() {
+        LoginService loginService = new LoginService();
+        PokerRoomService roomService = startedFourPlayerRoom(loginService);
+
+        roomService.bet("player-a", 4);
+        roomService.bet("player-d", 4);
+        roomService.fold("player-c");
+
+        PokerRoomSnapshot beforeLastCaller = roomService.snapshot();
+        assertEquals(2, beforeLastCaller.communityCards().size());
+        assertEquals("", beforeLastCaller.currentTurnId());
+        assertEquals(4, beforeLastCaller.currentBet());
+
+        roomService.bet("player-b", 4);
+
+        PokerRoomSnapshot afterLastCaller = roomService.snapshot();
+        assertEquals("player-b", afterLastCaller.currentAggressorId());
+        assertEquals("player-b", afterLastCaller.currentTurnId());
+    }
+
+    @Test
+    void playerCannotSeeOtherCallerChoicesBeforeDeciding() {
+        LoginService loginService = new LoginService();
+        PokerRoomService roomService = new PokerRoomService(loginService);
+        for (String playerId : List.of("player-a", "player-b", "player-c", "player-d", "player-e")) {
+            loginService.login(playerId);
+            roomService.join(playerId);
+            roomService.ready(playerId);
+        }
+        roomService.start("player-a");
+
+        roomService.bet("player-a", 4);
+        roomService.bet("player-d", 4);
+        roomService.fold("player-c");
+
+        String playerBJson = AppState.pokerRoomJson(roomService.snapshot(), "player-b");
+        assertTrue(playerBJson.contains("\"id\":\"player-d\",\"ready\":true,\"folded\":false,\"chipsCommitted\":2,\"roundBet\":0,\"acted\":false"));
+        assertTrue(playerBJson.contains("\"id\":\"player-c\",\"ready\":true,\"folded\":false,\"chipsCommitted\":2,\"roundBet\":0,\"acted\":false"));
+
+        roomService.bet("player-b", 4);
+
+        String playerBDecidedJson = AppState.pokerRoomJson(roomService.snapshot(), "player-b");
+        assertTrue(playerBDecidedJson.contains("\"id\":\"player-d\",\"ready\":true,\"folded\":false,\"chipsCommitted\":6,\"roundBet\":4,\"acted\":true"));
+        assertTrue(playerBDecidedJson.contains("\"id\":\"player-c\",\"ready\":true,\"folded\":true"));
     }
 
     @Test
@@ -423,7 +471,7 @@ class PokerRoomServiceTest {
     }
 
     @Test
-    void leavingStartedRoomReturnsPlayerToPokerRoomStatus() {
+    void leavingStartedRoomIsRejected() {
         LoginService loginService = new LoginService();
         PokerRoomService roomService = new PokerRoomService(loginService);
         loginService.login("player-1");
@@ -434,10 +482,10 @@ class PokerRoomServiceTest {
         roomService.ready("player-2");
         roomService.start("player-1");
 
-        roomService.leave("player-1");
+        assertThrows(IllegalStateException.class, () -> roomService.leave("player-1"));
 
-        assertEquals(1, roomService.snapshot().players().size());
-        assertEquals(PlayerStatus.GAME_A_ROOM, loginService.getOnlinePlayers().get(0).status());
+        assertEquals(2, roomService.snapshot().players().size());
+        assertEquals(PlayerStatus.GAME_A_PLAYING, loginService.getOnlinePlayers().get(0).status());
     }
 
     private PokerRoomService startedTwoPlayerRoom(LoginService loginService) {

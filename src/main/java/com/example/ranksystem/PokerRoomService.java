@@ -143,6 +143,7 @@ public class PokerRoomService {
             throw new IllegalArgumentException("bet must be between 2 and 10");
         }
 
+        boolean callAction = targetTable.currentBet > 0;
         if (targetTable.currentBet == 0) {
             if (!normalizedPlayerId.equals(targetTable.currentAggressorId)) {
                 throw new IllegalStateException("waiting for " + targetTable.currentAggressorId + " to bet");
@@ -160,7 +161,7 @@ public class PokerRoomService {
         int additionalChips = targetTable.currentBet - player.roundBet();
         targetTable.players.put(normalizedPlayerId, copyPlayer(player, player.ready(), player.holeCards(), false, player.chipsCommitted() + additionalChips, targetTable.currentBet, true, player.score() - additionalChips));
         targetTable.pot += additionalChips;
-        targetTable.message = normalizedPlayerId + " 押注 " + targetTable.currentBet + " 筹码";
+        targetTable.message = normalizedPlayerId + (callAction ? " 跟注 " : " 押注 ") + targetTable.currentBet + " 筹码";
         advanceAfterAction(targetTable);
     }
 
@@ -171,6 +172,9 @@ public class PokerRoomService {
     public synchronized void leave(String playerId, int tableId) {
         String normalizedPlayerId = loginService.normalizePlayerId(playerId);
         TableState targetTable = table(tableId);
+        if (targetTable.started && !targetTable.finished) {
+            throw new IllegalStateException("cannot leave after game started");
+        }
         targetTable.players.remove(normalizedPlayerId);
         loginService.updateStatus(normalizedPlayerId, PlayerStatus.GAME_A_ROOM);
         if (targetTable.players.isEmpty()) {
@@ -257,11 +261,21 @@ public class PokerRoomService {
         if (!targetTable.started || targetTable.finished) {
             throw new IllegalStateException("game is not active");
         }
-        if (!playerId.equals(targetTable.currentTurnId)) {
-            throw new IllegalStateException("not your turn");
-        }
-        if (targetTable.players.get(playerId).folded()) {
+        PokerRoomPlayer player = targetTable.players.get(playerId);
+        if (player.folded()) {
             throw new IllegalStateException("player already folded");
+        }
+        if (targetTable.currentBet == 0) {
+            if (!playerId.equals(targetTable.currentAggressorId)) {
+                throw new IllegalStateException("waiting for " + targetTable.currentAggressorId + " to bet");
+            }
+            return;
+        }
+        if (playerId.equals(targetTable.currentAggressorId)) {
+            throw new IllegalStateException("waiting for other players to call");
+        }
+        if (player.roundBet() == targetTable.currentBet) {
+            throw new IllegalStateException("player already matched current bet");
         }
     }
 
@@ -351,8 +365,8 @@ public class PokerRoomService {
             return;
         }
 
-        targetTable.currentTurnId = nextPendingCallerId(targetTable);
-        targetTable.message = targetTable.message + "，轮到 " + targetTable.currentTurnId;
+        targetTable.currentTurnId = "";
+        targetTable.message = targetTable.message + "，等待剩余玩家跟注或弃牌";
     }
 
     private boolean isAggressorStageComplete(TableState targetTable) {
@@ -370,6 +384,7 @@ public class PokerRoomService {
     }
 
     private void completeCurrentAggressorStage(TableState targetTable) {
+        String previousMessage = targetTable.message;
         if (!targetTable.currentAggressorId.isBlank() && !targetTable.completedAggressorIds.contains(targetTable.currentAggressorId)) {
             targetTable.completedAggressorIds.add(targetTable.currentAggressorId);
         }
@@ -378,7 +393,7 @@ public class PokerRoomService {
             if (targetTable.communityCards.size() < 5) {
                 targetTable.communityCards.add(draw(targetTable.deck));
                 resetBettingRound(targetTable);
-                targetTable.message = "本轮完成，发出新的公共牌，请 " + targetTable.currentAggressorId + " 主动押注";
+                targetTable.message = appendMessage(previousMessage, "本轮完成，发出新的公共牌，请 " + targetTable.currentAggressorId + " 主动押注");
             } else {
                 finishByShowdown(targetTable);
             }
@@ -386,7 +401,11 @@ public class PokerRoomService {
         }
 
         resetAggressorStage(targetTable, nextIncompleteAggressorId(targetTable));
-        targetTable.message = "进入 " + targetTable.currentAggressorId + " 的主动押注阶段";
+        targetTable.message = appendMessage(previousMessage, "进入 " + targetTable.currentAggressorId + " 的主动押注阶段");
+    }
+
+    private String appendMessage(String previousMessage, String nextMessage) {
+        return previousMessage == null || previousMessage.isBlank() ? nextMessage : previousMessage + "，" + nextMessage;
     }
 
     private boolean isBettingRoundComplete(TableState targetTable) {
