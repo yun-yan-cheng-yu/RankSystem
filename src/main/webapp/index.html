@@ -1,0 +1,1559 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RankSystem Lobby</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #f5f7fa;
+            color: #1f2937;
+        }
+
+        body.login-mode {
+            display: grid;
+            place-items: center;
+        }
+
+        body.app-mode {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 300px;
+            min-height: 100vh;
+        }
+
+        main {
+            width: min(520px, calc(100vw - 32px));
+        }
+
+        body.app-mode main {
+            width: auto;
+            padding: 40px;
+        }
+
+        h1 {
+            margin: 0 0 16px;
+            font-size: 24px;
+        }
+
+        input,
+        textarea,
+        button {
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        input {
+            height: 44px;
+            margin-bottom: 12px;
+            padding: 0 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+        }
+
+        button {
+            height: 44px;
+            margin-top: 8px;
+            border: 0;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+        }
+
+        button.secondary {
+            background: #475569;
+        }
+
+        button.danger {
+            background: #dc2626;
+        }
+
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        textarea {
+            height: 140px;
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            resize: none;
+        }
+
+        .status {
+            min-height: 22px;
+            margin-top: 12px;
+            color: #64748b;
+        }
+
+        .view {
+            max-width: 520px;
+        }
+
+        .view.game-view {
+            max-width: none;
+        }
+
+        .sidebar {
+            display: none;
+            padding: 32px 20px;
+            border-left: 1px solid #cbd5e1;
+            background: white;
+        }
+
+        body.app-mode .sidebar {
+            display: block;
+        }
+
+        .sidebar h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+        }
+
+        .player-list {
+            min-height: 220px;
+            white-space: pre-wrap;
+        }
+
+        .room-actions {
+            margin-top: 12px;
+        }
+
+        .poker-layout {
+            display: grid;
+            grid-template-columns: minmax(280px, 360px) minmax(360px, 1fr);
+            gap: 24px;
+            align-items: start;
+        }
+
+        .rules-panel {
+            margin-top: 16px;
+            padding: 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: white;
+        }
+
+        .action-panel {
+            margin-top: 16px;
+            padding: 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: white;
+        }
+
+        .action-panel h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+        }
+
+        .action-panel input {
+            margin-bottom: 4px;
+        }
+
+        .table-list-panel {
+            margin-bottom: 16px;
+        }
+
+        .table-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .table-card {
+            height: auto;
+            min-height: 86px;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: white;
+            color: #1f2937;
+            text-align: left;
+        }
+
+        .table-card.active {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+        }
+
+        .table-card-title {
+            font-weight: 700;
+        }
+
+        .table-card-players {
+            margin-top: 6px;
+            color: #64748b;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .rules-panel h2,
+        .table-panel h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+        }
+
+        .rules-panel ol {
+            margin: 0;
+            padding-left: 22px;
+            line-height: 1.7;
+        }
+
+        .table-panel {
+            min-width: 0;
+        }
+
+        .poker-table {
+            position: relative;
+            min-height: 540px;
+            border: 12px solid #7c4a23;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, #1f8a5b 0, #166746 64%, #0f4f37 100%);
+            box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.18), 0 18px 36px rgba(15, 23, 42, 0.18);
+            overflow: hidden;
+        }
+
+        .table-center {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: min(340px, 62%);
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+        }
+
+        .table-meta {
+            display: grid;
+            gap: 6px;
+            margin-bottom: 12px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+
+        .card-row {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 74px;
+        }
+
+        .card {
+            display: grid;
+            place-items: center;
+            width: 48px;
+            height: 66px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #111827;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
+        }
+
+        .card.red {
+            color: #dc2626;
+        }
+
+        .card.placeholder {
+            border-style: dashed;
+            background: rgba(248, 250, 252, 0.2);
+            color: #cbd5e1;
+            box-shadow: none;
+        }
+
+        .seat {
+            position: absolute;
+            width: 148px;
+            min-height: 96px;
+            padding: 10px;
+            border: 1px solid rgba(226, 232, 240, 0.75);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+            transform: translate(-50%, -50%);
+        }
+
+        .seat-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 700;
+        }
+
+        .seat-badge {
+            display: inline-block;
+            margin-left: 4px;
+            padding: 1px 5px;
+            border-radius: 999px;
+            background: #f59e0b;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            vertical-align: 1px;
+        }
+
+        .seat-info {
+            margin: 4px 0 8px;
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .seat-cards {
+            display: flex;
+            gap: 6px;
+        }
+
+        .seat .card {
+            width: 34px;
+            height: 46px;
+            font-size: 13px;
+        }
+
+        .progress-panel {
+            margin-bottom: 16px;
+            padding: 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: white;
+        }
+
+        .progress-panel h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+        }
+
+        .progress-track {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .progress-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .progress-round {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .progress-round-title {
+            color: #475569;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .progress-node {
+            width: auto;
+            min-width: 72px;
+            height: 34px;
+            margin: 0;
+            padding: 0 10px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            color: #1f2937;
+            font-size: 13px;
+        }
+
+        .progress-node.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .progress-node.done {
+            background: #16a34a;
+            color: white;
+        }
+
+        .progress-node.folded {
+            background: #94a3b8;
+            color: white;
+        }
+
+        .sub-progress {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .sub-progress-title {
+            margin-bottom: 8px;
+            color: #475569;
+            font-size: 14px;
+        }
+
+        .showdown-panel {
+            margin-top: 16px;
+            padding: 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: white;
+        }
+
+        .showdown-panel h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+        }
+
+        .showdown-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .showdown-row {
+            display: grid;
+            grid-template-columns: minmax(100px, 1fr) minmax(82px, auto) minmax(220px, auto);
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #f8fafc;
+        }
+
+        .showdown-row.winner {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .showdown-player {
+            font-weight: 700;
+        }
+
+        .showdown-hand {
+            color: #2563eb;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .showdown-card-groups {
+            display: grid;
+            gap: 8px;
+            justify-items: end;
+        }
+
+        .showdown-card-group {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .showdown-card-label {
+            min-width: 34px;
+            color: #64748b;
+            font-size: 13px;
+            text-align: right;
+        }
+
+        .showdown-cards {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .showdown-cards .card {
+            width: 34px;
+            height: 46px;
+            font-size: 13px;
+        }
+
+        .floating-message {
+            position: fixed;
+            left: 50%;
+            top: 34%;
+            z-index: 10;
+            min-width: 180px;
+            max-width: min(320px, calc(100vw - 32px));
+            padding: 12px 18px;
+            border-radius: 6px;
+            background: rgba(15, 23, 42, 0.92);
+            color: white;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transform: translate(-50%, 12px);
+        }
+
+        .floating-message.show {
+            animation: float-message 1.4s ease-out;
+        }
+
+        @keyframes float-message {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, 12px);
+            }
+            15% {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+            80% {
+                opacity: 1;
+                transform: translate(-50%, -10px);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -20px);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 760px) {
+            body.app-mode {
+                grid-template-columns: 1fr;
+            }
+
+            body.app-mode main {
+                padding: 24px 16px;
+            }
+
+            .sidebar {
+                border-left: 0;
+                border-top: 1px solid #cbd5e1;
+            }
+
+            .poker-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .showdown-row {
+                grid-template-columns: 1fr;
+            }
+
+            .showdown-hand,
+            .showdown-card-groups,
+            .showdown-card-group,
+            .showdown-cards {
+                justify-content: flex-start;
+                justify-items: start;
+                text-align: left;
+            }
+
+            .poker-table {
+                min-height: 680px;
+                border-radius: 26px;
+            }
+
+            .seat {
+                width: 136px;
+            }
+        }
+    </style>
+</head>
+<body class="login-mode">
+<main>
+    <section id="loginView" class="view">
+        <h1>登录</h1>
+        <input id="playerIdInput" type="text" autocomplete="off" placeholder="输入唯一ID">
+        <button id="loginButton" type="button">登录</button>
+        <div id="loginStatus" class="status"></div>
+    </section>
+
+    <section id="lobbyView" class="view hidden">
+        <h1>总大厅</h1>
+        <div id="currentPlayer" class="status"></div>
+        <button id="pokerButton" type="button">德州扑克</button>
+        <button id="otherButton" class="secondary" type="button">其他</button>
+        <div id="lobbyStatus" class="status"></div>
+    </section>
+
+    <section id="pokerView" class="view game-view hidden">
+        <h1>德州扑克</h1>
+        <div id="pokerPlayerStatus" class="status"></div>
+        <section id="tableListPanel" class="table-list-panel">
+            <h2>桌子大厅</h2>
+            <div id="tableGrid" class="table-grid"></div>
+        </section>
+        <div id="gameArea" class="poker-layout hidden">
+            <div>
+                <div class="room-actions">
+                    <button id="joinRoomButton" type="button">进入房间</button>
+                    <button id="readyRoomButton" class="secondary hidden" type="button">准备</button>
+                    <button id="startRoomButton" class="secondary hidden" type="button">开始游戏</button>
+                    <button id="leaveRoomButton" class="danger hidden" type="button">离开房间</button>
+                </div>
+                <textarea id="roomText" readonly></textarea>
+                <button id="backToLobbyButton" class="secondary" type="button">回到大厅</button>
+                <section class="action-panel">
+                    <h2>行动区</h2>
+                    <div id="actionStatus" class="status"></div>
+                    <input id="betInput" type="number" min="2" max="10" value="2">
+                    <button id="betButton" type="button">押注</button>
+                    <button id="foldButton" class="danger" type="button">弃牌</button>
+                </section>
+                <section class="rules-panel">
+                    <h2>房间规则</h2>
+                    <ol id="pokerRulesList"></ol>
+                </section>
+                <div id="pokerStatus" class="status"></div>
+            </div>
+            <div class="table-panel">
+                <h2>游戏区</h2>
+                <section class="progress-panel">
+                    <h2>游戏进度</h2>
+                    <div id="gameProgress" class="progress-list"></div>
+                    <div id="subProgress" class="sub-progress hidden"></div>
+                </section>
+                <div id="pokerTable" class="poker-table">
+                    <div class="table-center">
+                        <div id="tableMeta" class="table-meta"></div>
+                        <div id="communityCards" class="card-row"></div>
+                    </div>
+                </div>
+                <section id="showdownPanel" class="showdown-panel hidden">
+                    <h2>比牌结果</h2>
+                    <div id="showdownList" class="showdown-list"></div>
+                </section>
+            </div>
+        </div>
+    </section>
+</main>
+
+<aside id="sidebar" class="sidebar">
+    <h2>功能区</h2>
+    <button id="sidebarRefreshButton" class="secondary" type="button">查看已经登录的所有人以及状态</button>
+    <button id="logoutButton" class="danger" type="button">登出</button>
+    <textarea id="allPlayersText" class="player-list" readonly></textarea>
+    <div id="sidebarStatus" class="status"></div>
+</aside>
+
+<div id="floatingMessage" class="floating-message"></div>
+
+<script>
+    const PLAYER_ID_STORAGE_KEY = "rankSystemPlayerId";
+    const VIEW_STORAGE_KEY = "rankSystemView";
+    const REALTIME_RECONNECT_DELAY_MS = 1000;
+    const STATUS = {
+        LOBBY: "在总大厅",
+        GAME_A_ROOM: "在德州扑克房间"
+    };
+
+    const loginView = document.getElementById("loginView");
+    const lobbyView = document.getElementById("lobbyView");
+    const pokerView = document.getElementById("pokerView");
+    const playerIdInput = document.getElementById("playerIdInput");
+    const loginButton = document.getElementById("loginButton");
+    const pokerButton = document.getElementById("pokerButton");
+    const otherButton = document.getElementById("otherButton");
+    const backToLobbyButton = document.getElementById("backToLobbyButton");
+    const joinRoomButton = document.getElementById("joinRoomButton");
+    const readyRoomButton = document.getElementById("readyRoomButton");
+    const startRoomButton = document.getElementById("startRoomButton");
+    const leaveRoomButton = document.getElementById("leaveRoomButton");
+    const betButton = document.getElementById("betButton");
+    const foldButton = document.getElementById("foldButton");
+    const logoutButton = document.getElementById("logoutButton");
+    const sidebarRefreshButton = document.getElementById("sidebarRefreshButton");
+    const currentPlayer = document.getElementById("currentPlayer");
+    const pokerPlayerStatus = document.getElementById("pokerPlayerStatus");
+    const loginStatus = document.getElementById("loginStatus");
+    const lobbyStatus = document.getElementById("lobbyStatus");
+    const pokerStatus = document.getElementById("pokerStatus");
+    const sidebarStatus = document.getElementById("sidebarStatus");
+    const actionStatus = document.getElementById("actionStatus");
+    const betInput = document.getElementById("betInput");
+    const roomText = document.getElementById("roomText");
+    const allPlayersText = document.getElementById("allPlayersText");
+    const pokerRulesList = document.getElementById("pokerRulesList");
+    const tableListPanel = document.getElementById("tableListPanel");
+    const pokerTable = document.getElementById("pokerTable");
+    const gameArea = document.getElementById("gameArea");
+    const tableGrid = document.getElementById("tableGrid");
+    const tableMeta = document.getElementById("tableMeta");
+    const communityCards = document.getElementById("communityCards");
+    const gameProgress = document.getElementById("gameProgress");
+    const subProgress = document.getElementById("subProgress");
+    const showdownPanel = document.getElementById("showdownPanel");
+    const showdownList = document.getElementById("showdownList");
+    const floatingMessage = document.getElementById("floatingMessage");
+
+    let currentPlayerId = "";
+    let realtimeSocket = null;
+    let currentPokerRoom = null;
+    let currentTableId = 0;
+    let currentPokerTables = [];
+    let selectedAggressorId = "";
+    let selectedProgressRoundIndex = 0;
+    let privateRoomRefreshing = false;
+
+    connectRealtime();
+    restoreLogin();
+
+    loginButton.addEventListener("click", async () => {
+        const playerId = playerIdInput.value.trim();
+        if (!playerId) {
+            loginStatus.textContent = "请输入唯一ID";
+            return;
+        }
+
+        setBusy(loginButton, true);
+        loginStatus.textContent = "登录中...";
+
+        try {
+            await postForm("login", {id: playerId});
+            sessionStorage.setItem(PLAYER_ID_STORAGE_KEY, playerId);
+            showLobby(playerId);
+            await refreshAllPlayers();
+        } catch (error) {
+            loginStatus.textContent = `登录失败: ${error.message}`;
+        } finally {
+            setBusy(loginButton, false);
+        }
+    });
+
+    pokerButton.addEventListener("click", async () => {
+        setBusy(pokerButton, true);
+        lobbyStatus.textContent = "进入德州扑克中...";
+
+        try {
+            showPoker();
+            await refreshTables();
+            await refreshAllPlayers();
+        } catch (error) {
+            lobbyStatus.textContent = `进入失败: ${error.message}`;
+        } finally {
+            setBusy(pokerButton, false);
+        }
+    });
+
+    otherButton.addEventListener("click", () => {
+        showFloatingMessage("该功能未开放");
+    });
+
+    backToLobbyButton.addEventListener("click", async () => {
+        setBusy(backToLobbyButton, true);
+        pokerStatus.textContent = "返回大厅中...";
+
+        try {
+            if (currentTableId) {
+                await postForm("poker-room/leave", withTable({id: currentPlayerId}));
+            }
+            await postForm("state", {id: currentPlayerId, state: STATUS.LOBBY});
+            currentTableId = 0;
+            currentPokerRoom = null;
+            showLobby(currentPlayerId);
+            await refreshAllPlayers();
+        } catch (error) {
+            pokerStatus.textContent = `返回失败: ${error.message}`;
+        } finally {
+            setBusy(backToLobbyButton, false);
+        }
+    });
+
+    logoutButton.addEventListener("click", async () => {
+        setBusy(logoutButton, true);
+        sidebarStatus.textContent = "登出中...";
+
+        try {
+            await postForm("logout", {id: currentPlayerId});
+            sessionStorage.removeItem(PLAYER_ID_STORAGE_KEY);
+            sessionStorage.removeItem(VIEW_STORAGE_KEY);
+            showLogin();
+        } catch (error) {
+            sidebarStatus.textContent = `登出失败: ${error.message}`;
+        } finally {
+            setBusy(logoutButton, false);
+        }
+    });
+
+    sidebarRefreshButton.addEventListener("click", refreshAllPlayers);
+
+    joinRoomButton.addEventListener("click", async () => {
+        if (!currentTableId) {
+            pokerStatus.textContent = "请先选择桌子";
+            return;
+        }
+        setBusy(joinRoomButton, true);
+        pokerStatus.textContent = "进入桌子中...";
+
+        try {
+            await joinTable(currentTableId);
+            await refreshRoom();
+            await refreshTables();
+            await refreshAllPlayers();
+            pokerStatus.textContent = "";
+        } catch (error) {
+            pokerStatus.textContent = `进入桌子失败: ${error.message}`;
+        } finally {
+            setBusy(joinRoomButton, false);
+        }
+    });
+
+    readyRoomButton.addEventListener("click", async () => {
+        setBusy(readyRoomButton, true);
+        const currentPlayer = currentPokerRoom?.players?.find(player => player.id === currentPlayerId);
+        const targetReady = !currentPlayer?.ready;
+        pokerStatus.textContent = targetReady ? "准备中..." : "取消准备中...";
+
+        try {
+            await postForm(targetReady ? "poker-room/ready" : "poker-room/unready", withTable({id: currentPlayerId}));
+            await refreshRoom();
+            pokerStatus.textContent = "";
+        } catch (error) {
+            pokerStatus.textContent = `${targetReady ? "准备" : "取消准备"}失败: ${error.message}`;
+        } finally {
+            setBusy(readyRoomButton, false);
+        }
+    });
+
+    startRoomButton.addEventListener("click", async () => {
+        setBusy(startRoomButton, true);
+        const nextHand = Boolean(currentPokerRoom?.finished);
+        pokerStatus.textContent = nextHand ? "开始下一局中..." : "开始游戏中...";
+
+        try {
+            await postForm(nextHand ? "poker-room/next" : "poker-room/start", withTable({id: currentPlayerId}));
+            await refreshRoom();
+            await refreshAllPlayers();
+            pokerStatus.textContent = "";
+        } catch (error) {
+            pokerStatus.textContent = `${nextHand ? "下一局" : "开始"}失败: ${error.message}`;
+        } finally {
+            setBusy(startRoomButton, false);
+        }
+    });
+
+    leaveRoomButton.addEventListener("click", async () => {
+        setBusy(leaveRoomButton, true);
+        pokerStatus.textContent = "离开房间中...";
+
+        try {
+            await postForm("poker-room/leave", withTable({id: currentPlayerId}));
+            currentTableId = 0;
+            currentPokerRoom = null;
+            await refreshRoom();
+            await refreshTables();
+            await refreshAllPlayers();
+            pokerStatus.textContent = "";
+        } catch (error) {
+            pokerStatus.textContent = `离开失败: ${error.message}`;
+        } finally {
+            setBusy(leaveRoomButton, false);
+        }
+    });
+
+    betButton.addEventListener("click", async () => {
+        setBusy(betButton, true);
+        setBusy(foldButton, true);
+        pokerStatus.textContent = "押注中...";
+
+        try {
+            await postForm("poker-room/bet", withTable({id: currentPlayerId, chips: betInput.value}));
+            await refreshRoom();
+            pokerStatus.textContent = "";
+        } catch (error) {
+            pokerStatus.textContent = `押注失败: ${error.message}`;
+        } finally {
+            updateActionControls(currentPokerRoom);
+        }
+    });
+
+    foldButton.addEventListener("click", async () => {
+        setBusy(betButton, true);
+        setBusy(foldButton, true);
+        pokerStatus.textContent = "弃牌中...";
+
+        try {
+            await postForm("poker-room/fold", withTable({id: currentPlayerId}));
+            await refreshRoom();
+            pokerStatus.textContent = "";
+        } catch (error) {
+            pokerStatus.textContent = `弃牌失败: ${error.message}`;
+        } finally {
+            updateActionControls(currentPokerRoom);
+        }
+    });
+
+    playerIdInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            loginButton.click();
+        }
+    });
+
+    async function restoreLogin() {
+        const savedPlayerId = sessionStorage.getItem(PLAYER_ID_STORAGE_KEY);
+        if (!savedPlayerId) {
+            showLogin();
+            return;
+        }
+
+        loginStatus.textContent = "恢复登录中...";
+        try {
+            if (!await isOnline(savedPlayerId)) {
+                await postForm("login", {id: savedPlayerId});
+            }
+            const savedView = sessionStorage.getItem(VIEW_STORAGE_KEY);
+            if (savedView === "poker") {
+                showPoker(savedPlayerId);
+                await refreshTables();
+            } else {
+                showLobby(savedPlayerId);
+            }
+            await refreshAllPlayers();
+        } catch (error) {
+            sessionStorage.removeItem(PLAYER_ID_STORAGE_KEY);
+            sessionStorage.removeItem(VIEW_STORAGE_KEY);
+            showLogin();
+            loginStatus.textContent = "登录已失效，请重新登录";
+        }
+    }
+
+    function showLogin() {
+        currentPlayerId = "";
+        document.body.className = "login-mode";
+        loginView.classList.remove("hidden");
+        lobbyView.classList.add("hidden");
+        pokerView.classList.add("hidden");
+        playerIdInput.value = "";
+        allPlayersText.value = "";
+        sidebarStatus.textContent = "";
+        playerIdInput.focus();
+    }
+
+    function showLobby(playerId) {
+        currentPlayerId = playerId;
+        sessionStorage.setItem(VIEW_STORAGE_KEY, "lobby");
+        document.body.className = "app-mode";
+        loginView.classList.add("hidden");
+        lobbyView.classList.remove("hidden");
+        pokerView.classList.add("hidden");
+        currentPlayer.textContent = `当前玩家：${currentPlayerId} / ${STATUS.LOBBY}`;
+        loginStatus.textContent = "";
+        lobbyStatus.textContent = "";
+    }
+
+    function showPoker(playerId = currentPlayerId) {
+        currentPlayerId = playerId;
+        sessionStorage.setItem(VIEW_STORAGE_KEY, "poker");
+        document.body.className = "app-mode";
+        loginView.classList.add("hidden");
+        lobbyView.classList.add("hidden");
+        pokerView.classList.remove("hidden");
+        pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_ROOM}`;
+        pokerStatus.textContent = "";
+        currentTableId = 0;
+        currentPokerRoom = null;
+    }
+
+    async function refreshRoom() {
+        if (!currentTableId) {
+            updateRoom(emptyRoom());
+            return;
+        }
+        const room = await getJson(`poker-room?id=${encodeURIComponent(currentPlayerId)}&table=${currentTableId}`);
+        updateRoom(room);
+    }
+
+    async function refreshTables() {
+        const data = await getJson("poker-tables");
+        currentPokerTables = data.tables || [];
+        renderTables(currentPokerTables);
+        const playerTable = currentPokerTables.find(table => table.players.includes(currentPlayerId));
+        if (playerTable) {
+            currentTableId = playerTable.id;
+            await refreshRoom();
+        } else {
+            currentTableId = 0;
+            currentPokerRoom = null;
+            updateRoom(emptyRoom());
+        }
+    }
+
+    async function joinTable(tableId) {
+        currentTableId = tableId;
+        await postForm("poker-room/join", withTable({id: currentPlayerId}));
+    }
+
+    function updateRoom(room) {
+        currentPokerRoom = room;
+        const currentPlayer = room.players.find(player => player.id === currentPlayerId);
+        const inRoom = Boolean(currentPlayer);
+        const isHost = room.hostId === currentPlayerId;
+        const tableLocked = Boolean(currentPlayer?.ready || room.started);
+        const nextDealerId = nextRoomPlayerId(room, room.dealerId);
+        const canStartNextHand = Boolean(room.started && room.finished && currentPlayerId === nextDealerId);
+
+        tableListPanel.classList.toggle("hidden", tableLocked);
+        gameArea.classList.toggle("hidden", !currentTableId);
+        roomText.value = formatRoom(room);
+        renderRules(room.rules || []);
+        renderPokerTable(room);
+        renderShowdown(room);
+        renderProgress(room);
+        joinRoomButton.classList.toggle("hidden", inRoom);
+        readyRoomButton.classList.toggle("hidden", !inRoom || room.started);
+        readyRoomButton.textContent = currentPlayer?.ready ? "取消准备" : "准备";
+        startRoomButton.classList.toggle("hidden", !inRoom || (!isHost && !room.finished));
+        startRoomButton.textContent = room.finished ? "下一局" : "开始游戏";
+        startRoomButton.disabled = room.finished ? !canStartNextHand : !room.canStart;
+        leaveRoomButton.classList.toggle("hidden", !inRoom);
+        updateActionControls(room);
+
+        if (room.started && inRoom) {
+            pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / 在德州扑克中`;
+        } else if (inRoom) {
+            pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_ROOM}`;
+        } else {
+            pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / 未进入房间`;
+        }
+    }
+
+    async function refreshAllPlayers() {
+        setBusy(sidebarRefreshButton, true);
+        sidebarStatus.textContent = "查询中...";
+
+        try {
+            const data = await getJson("players");
+            allPlayersText.value = formatPlayers(data.players, "当前没有已登录玩家");
+            sidebarStatus.textContent = "";
+        } catch (error) {
+            sidebarStatus.textContent = `查询失败: ${error.message}`;
+        } finally {
+            setBusy(sidebarRefreshButton, false);
+        }
+    }
+
+    async function postForm(url, fields) {
+        const body = new URLSearchParams(fields);
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {"Content-Type": "application/x-www-form-urlencoded"},
+            body
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({message: `HTTP ${response.status}`}));
+            throw new Error(data.message || `HTTP ${response.status}`);
+        }
+    }
+
+    async function getJson(url) {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    function connectRealtime() {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        realtimeSocket = new WebSocket(`${protocol}//${window.location.host}${appBasePath()}ws`);
+
+        realtimeSocket.addEventListener("message", (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === "snapshot") {
+                applySnapshot(message);
+            }
+        });
+
+        realtimeSocket.addEventListener("close", () => {
+            setTimeout(connectRealtime, REALTIME_RECONNECT_DELAY_MS);
+        });
+
+        realtimeSocket.addEventListener("error", () => {
+            realtimeSocket.close();
+        });
+    }
+
+    function applySnapshot(snapshot) {
+        if (snapshot.players) {
+            allPlayersText.value = formatPlayers(snapshot.players, "当前没有已登录玩家");
+        }
+
+        if (snapshot.pokerRoom && !pokerView.classList.contains("hidden")) {
+            const room = mergePrivateCards(snapshot.pokerRoom);
+            if (!currentTableId || room.tableId === currentTableId) {
+                updateRoom(room);
+            }
+            if (currentPlayerId) {
+                refreshPrivateRoomSoon();
+            }
+        }
+        if (snapshot.pokerTables && !pokerView.classList.contains("hidden")) {
+            currentPokerTables = snapshot.pokerTables.tables || [];
+            renderTables(currentPokerTables);
+        }
+    }
+
+    function appBasePath() {
+        const path = window.location.pathname;
+        if (path.endsWith("/")) {
+            return path;
+        }
+        return path.substring(0, path.lastIndexOf("/") + 1);
+    }
+
+    async function isOnline(playerId) {
+        const data = await getJson("players");
+        return data.players.some(player => player.id === playerId);
+    }
+
+    function formatPlayers(players, emptyText) {
+        if (!players || players.length === 0) {
+            return emptyText;
+        }
+        return players.map(player => `${player.id}：${player.status}`).join("\n");
+    }
+
+    function renderTables(tables) {
+        tableGrid.innerHTML = "";
+        tables.forEach(table => {
+            const card = document.createElement("button");
+            card.type = "button";
+            card.className = `table-card${table.id === currentTableId ? " active" : ""}`;
+
+            const title = document.createElement("div");
+            title.className = "table-card-title";
+            title.textContent = `${table.id} 号桌 (${table.players.length}/10)`;
+            card.appendChild(title);
+
+            const players = document.createElement("div");
+            players.className = "table-card-players";
+            players.textContent = table.players.length > 0 ? table.players.join("、") : "空桌";
+            card.appendChild(players);
+
+            card.addEventListener("click", async () => {
+                const currentPlayer = currentPokerRoom?.players?.find(player => player.id === currentPlayerId);
+                if (currentPlayer?.ready || currentPokerRoom?.started) {
+                    pokerStatus.textContent = "已准备后不能切换桌子，请先取消准备";
+                    return;
+                }
+                pokerStatus.textContent = `进入 ${table.id} 号桌中...`;
+                try {
+                    await joinTable(table.id);
+                    await refreshTables();
+                    pokerStatus.textContent = "";
+                } catch (error) {
+                    pokerStatus.textContent = `进入桌子失败: ${error.message}`;
+                }
+            });
+            tableGrid.appendChild(card);
+        });
+    }
+
+    function withTable(fields) {
+        return {...fields, table: currentTableId || 1};
+    }
+
+    function emptyRoom() {
+        return {
+            tableId: 0,
+            players: [],
+            started: false,
+            canStart: false,
+            hostId: "",
+            dealerId: "",
+            currentAggressorId: "",
+            currentTurnId: "",
+            communityCards: [],
+            pot: 0,
+            currentBet: 0,
+            finished: false,
+            winnerId: "",
+            message: "",
+            aggressorOrder: [],
+            completedAggressorIds: [],
+            rules: []
+        };
+    }
+
+    function formatRoom(room) {
+        if (!room.players || room.players.length === 0) {
+            return "房间空闲，人数限制 2-10 人";
+        }
+
+        const state = room.started ? "游戏已开始" : room.canStart ? "所有人已准备，可以开始游戏" : "等待玩家准备";
+        const hostText = room.hostId ? `房主：${room.hostId}` : "房主：无";
+        const players = room.players
+                .map(player => `${player.id}${player.id === room.hostId ? "（房主）" : ""}：${player.ready ? "已准备" : "未准备"} / 积分 ${player.score || 0}`)
+                .join("\n");
+        return `${state}\n${hostText}\n人数：${room.players.length}/10\n${players}`;
+    }
+
+    function renderRules(rules) {
+        pokerRulesList.innerHTML = "";
+        rules.forEach(rule => {
+            const item = document.createElement("li");
+            item.textContent = rule;
+            pokerRulesList.appendChild(item);
+        });
+    }
+
+    function renderPokerTable(room) {
+        pokerTable.querySelectorAll(".seat").forEach(seat => seat.remove());
+
+        tableMeta.innerHTML = "";
+        [
+            room.started ? "游戏已开始" : "等待开局",
+            `房主：${room.hostId || "无"}`,
+            `底池：${room.pot || 0} 筹码`,
+            `当前押注：${room.currentBet || 0} 筹码`,
+            `庄家：${room.dealerId || "无"}`,
+            `本阶段主押：${room.currentAggressorId || "无"}`,
+            `当前行动：${room.currentTurnId || "无"}`,
+            room.winnerId ? `赢家：${room.winnerId}` : room.message || ""
+        ].forEach(text => {
+            const item = document.createElement("div");
+            item.textContent = text;
+            tableMeta.appendChild(item);
+        });
+
+        communityCards.innerHTML = "";
+        const cards = room.communityCards || [];
+        if (cards.length === 0) {
+            communityCards.appendChild(createCard("公共牌", true));
+        } else {
+            cards.forEach(card => communityCards.appendChild(createCard(card, false)));
+        }
+
+        const players = room.players || [];
+        if (players.length === 0) {
+            return;
+        }
+
+        players.forEach((player, index) => {
+            const seat = document.createElement("div");
+            seat.className = "seat";
+            const angle = -90 + (360 / players.length) * index;
+            const radiusX = 39;
+            const radiusY = 38;
+            const left = 50 + radiusX * Math.cos(angle * Math.PI / 180);
+            const top = 50 + radiusY * Math.sin(angle * Math.PI / 180);
+            seat.style.left = `${left}%`;
+            seat.style.top = `${top}%`;
+
+            const name = document.createElement("div");
+            name.className = "seat-name";
+            const labels = [];
+            if (player.id === room.dealerId) {
+                labels.push("庄");
+            }
+            if (player.id === room.currentTurnId) {
+                labels.push("行动");
+            }
+            name.textContent = labels.length > 0 ? `${player.id}（${labels.join(" / ")}）` : player.id;
+            if (player.id === room.hostId) {
+                const hostBadge = document.createElement("span");
+                hostBadge.className = "seat-badge";
+                hostBadge.textContent = "房主";
+                name.appendChild(hostBadge);
+            }
+            seat.appendChild(name);
+
+            const info = document.createElement("div");
+            info.className = "seat-info";
+            info.textContent = room.started
+                    ? `${player.folded ? "已弃牌" : "游戏中"} / 已投 ${player.chipsCommitted || 0} / 本轮 ${player.roundBet || 0} / 积分 ${player.score || 0}`
+                    : `${player.ready ? "已准备" : "未准备"} / 积分 ${player.score || 0}`;
+            seat.appendChild(info);
+
+            const cardRow = document.createElement("div");
+            cardRow.className = "seat-cards";
+            const showdown = room.finished && (room.communityCards || []).length >= 5;
+            const holeCards = player.id === currentPlayerId || showdown ? player.holeCards || [] : [];
+            if (holeCards.length === 0) {
+                cardRow.appendChild(createCard("?", true));
+                cardRow.appendChild(createCard("?", true));
+            } else {
+                holeCards.forEach(card => cardRow.appendChild(createCard(card, false)));
+            }
+            seat.appendChild(cardRow);
+            pokerTable.appendChild(seat);
+        });
+    }
+
+    function renderShowdown(room) {
+        const showdown = room.finished && (room.communityCards || []).length >= 5;
+        showdownPanel.classList.toggle("hidden", !showdown);
+        showdownList.innerHTML = "";
+        if (!showdown) {
+            return;
+        }
+
+        (room.players || []).forEach(player => {
+            const row = document.createElement("div");
+            row.className = "showdown-row";
+            if (player.id === room.winnerId) {
+                row.classList.add("winner");
+            }
+
+            const playerName = document.createElement("div");
+            playerName.className = "showdown-player";
+            playerName.textContent = player.id === room.winnerId ? `${player.id}（赢家）` : player.id;
+            row.appendChild(playerName);
+
+            const hand = document.createElement("div");
+            hand.className = "showdown-hand";
+            hand.textContent = player.handName || (player.folded ? "已弃牌" : "未知牌型");
+            row.appendChild(hand);
+
+            const cardGroups = document.createElement("div");
+            cardGroups.className = "showdown-card-groups";
+            cardGroups.appendChild(createShowdownCardGroup("底牌", player.holeCards || []));
+            cardGroups.appendChild(createShowdownCardGroup("成牌", player.bestCards || []));
+            row.appendChild(cardGroups);
+
+            showdownList.appendChild(row);
+        });
+    }
+
+    function createShowdownCardGroup(label, cardTexts) {
+        const group = document.createElement("div");
+        group.className = "showdown-card-group";
+
+        const groupLabel = document.createElement("div");
+        groupLabel.className = "showdown-card-label";
+        groupLabel.textContent = label;
+        group.appendChild(groupLabel);
+
+        const cards = document.createElement("div");
+        cards.className = "showdown-cards";
+        if (cardTexts.length === 0) {
+            cards.appendChild(createCard("-", true));
+        } else {
+            cardTexts.forEach(card => cards.appendChild(createCard(card, false)));
+        }
+        group.appendChild(cards);
+        return group;
+    }
+
+    function renderProgress(room) {
+        gameProgress.innerHTML = "";
+        const order = room.aggressorOrder || [];
+        const completed = new Set(room.completedAggressorIds || []);
+        const completedRoundCount = completedBettingRoundCount(room);
+        const currentRoundIndex = Math.min(completedRoundCount, 3);
+        if (!selectedAggressorId || !order.includes(selectedAggressorId)) {
+            selectedAggressorId = room.currentAggressorId || order[0] || "";
+        }
+        if (selectedProgressRoundIndex < 0 || selectedProgressRoundIndex > 3) {
+            selectedProgressRoundIndex = currentRoundIndex;
+        }
+
+        if (order.length === 0) {
+            gameProgress.textContent = "游戏开始后显示押注阶段";
+            subProgress.classList.add("hidden");
+            subProgress.innerHTML = "";
+            return;
+        }
+
+        for (let roundIndex = 0; roundIndex < 4; roundIndex++) {
+            const round = document.createElement("div");
+            round.className = "progress-round";
+
+            const title = document.createElement("div");
+            title.className = "progress-round-title";
+            title.textContent = bettingRoundName(roundIndex);
+            round.appendChild(title);
+
+            const track = document.createElement("div");
+            track.className = "progress-track";
+            order.forEach(playerId => {
+                const player = room.players.find(item => item.id === playerId);
+                const node = document.createElement("button");
+                node.type = "button";
+                node.className = "progress-node";
+                if (player?.folded) {
+                    node.classList.add("folded");
+                } else if (roundIndex < completedRoundCount || (roundIndex === currentRoundIndex && completed.has(playerId))) {
+                    node.classList.add("done");
+                } else if (roundIndex === currentRoundIndex && playerId === room.currentAggressorId && !room.finished) {
+                    node.classList.add("active");
+                }
+                node.textContent = `${playerId} 押注`;
+                node.addEventListener("click", () => {
+                    selectedProgressRoundIndex = roundIndex;
+                    selectedAggressorId = playerId;
+                    renderSubProgress(room, roundIndex, playerId);
+                });
+                track.appendChild(node);
+            });
+
+            if (roundIndex < 3) {
+                track.appendChild(createTerminalNode("发公共牌", roundIndex < completedRoundCount || room.finished));
+            } else {
+                track.appendChild(createTerminalNode("比牌阶段", room.finished));
+            }
+            round.appendChild(track);
+            gameProgress.appendChild(round);
+        }
+
+        renderSubProgress(room, selectedProgressRoundIndex, selectedAggressorId);
+    }
+
+    function renderSubProgress(room, roundIndex, aggressorId) {
+        const completed = new Set(room.completedAggressorIds || []);
+        const completedRoundCount = completedBettingRoundCount(room);
+        const currentRoundIndex = Math.min(completedRoundCount, 3);
+        subProgress.classList.remove("hidden");
+        subProgress.innerHTML = "";
+
+        const title = document.createElement("div");
+        title.className = "sub-progress-title";
+        if (roundIndex < completedRoundCount || room.finished) {
+            title.textContent = `${bettingRoundName(roundIndex)}：${aggressorId} 的押注阶段已完成`;
+        } else if (roundIndex > currentRoundIndex || aggressorId !== room.currentAggressorId) {
+            title.textContent = `${aggressorId} 的押注阶段尚未开始`;
+        } else if (completed.has(aggressorId)) {
+            title.textContent = `${aggressorId} 的押注阶段已完成`;
+        } else {
+            title.textContent = `${bettingRoundName(roundIndex)}：${aggressorId} 的押注阶段：${room.currentBet > 0 ? `跟注 ${room.currentBet} 筹码` : "等待主押"}`;
+        }
+        subProgress.appendChild(title);
+
+        const track = document.createElement("div");
+        track.className = "progress-track";
+        room.players.forEach(player => {
+            if (player.id === aggressorId) {
+                return;
+            }
+            const node = document.createElement("button");
+            node.type = "button";
+            node.className = "progress-node";
+            node.disabled = true;
+            if (player.folded) {
+                node.classList.add("folded");
+                node.textContent = `${player.id} 弃牌`;
+            } else if (roundIndex < completedRoundCount || room.finished || completed.has(aggressorId)) {
+                node.classList.add("done");
+                node.textContent = `${player.id} 已跟`;
+            } else if (roundIndex === currentRoundIndex && aggressorId === room.currentAggressorId && room.currentBet > 0 && player.roundBet === room.currentBet) {
+                node.classList.add("done");
+                node.textContent = `${player.id} 已跟`;
+            } else if (roundIndex === currentRoundIndex && aggressorId === room.currentAggressorId && player.id === room.currentTurnId) {
+                node.classList.add("active");
+                node.textContent = `${player.id} 行动`;
+            } else {
+                node.textContent = `${player.id} 等待`;
+            }
+            track.appendChild(node);
+        });
+        subProgress.appendChild(track);
+    }
+
+    function createTerminalNode(text, done) {
+        const node = document.createElement("button");
+        node.type = "button";
+        node.className = "progress-node";
+        node.disabled = true;
+        if (done) {
+            node.classList.add("done");
+        }
+        node.textContent = text;
+        return node;
+    }
+
+    function completedBettingRoundCount(room) {
+        if (room?.finished) {
+            return 4;
+        }
+        return Math.max(0, Math.min(3, (room?.communityCards?.length || 2) - 2));
+    }
+
+    function bettingRoundName(roundIndex) {
+        return ["翻牌", "转牌", "河牌", "比牌前"][roundIndex] || "押注阶段";
+    }
+
+    function nextRoomPlayerId(room, playerId) {
+        const ids = (room?.players || []).map(player => player.id);
+        if (ids.length === 0) {
+            return "";
+        }
+        const index = Math.max(0, ids.indexOf(playerId));
+        return ids[(index + 1) % ids.length];
+    }
+
+    function updateActionControls(room) {
+        const currentPlayer = room?.players?.find(player => player.id === currentPlayerId);
+        const canAct = Boolean(room?.started && !room.finished && currentPlayer && !currentPlayer.folded && room.currentTurnId === currentPlayerId);
+        betButton.disabled = !canAct;
+        foldButton.disabled = !canAct;
+        betInput.disabled = !canAct || room.currentBet > 0;
+        betInput.value = room?.currentBet > 0 ? room.currentBet : Math.min(Math.max(Number(betInput.value) || 2, 2), 10);
+
+        if (!room?.started) {
+            actionStatus.textContent = "游戏开始后可以押注或弃牌";
+        } else if (room.finished) {
+            actionStatus.textContent = room.message || "本局已结束";
+        } else if (!currentPlayer) {
+            actionStatus.textContent = "请先进入房间";
+        } else if (currentPlayer.folded) {
+            actionStatus.textContent = "你已弃牌，等待本局结束";
+        } else if (canAct) {
+            actionStatus.textContent = room.currentBet > 0
+                    ? `轮到你跟注：需要押 ${room.currentBet} 筹码，或弃牌`
+                    : "轮到你主动押注：押注 2-10 筹码，或弃牌";
+        } else {
+            actionStatus.textContent = `等待 ${room.currentTurnId || "其他玩家"} 行动`;
+        }
+    }
+
+    async function refreshPrivateRoomSoon() {
+        if (privateRoomRefreshing) {
+            return;
+        }
+
+        privateRoomRefreshing = true;
+        try {
+            await refreshRoom();
+        } finally {
+            privateRoomRefreshing = false;
+        }
+    }
+
+    function mergePrivateCards(room) {
+        if (!currentPokerRoom || !currentPokerRoom.players || !room.players) {
+            return room;
+        }
+
+        const previousCurrentPlayer = currentPokerRoom.players.find(player => player.id === currentPlayerId);
+        if (!previousCurrentPlayer || !previousCurrentPlayer.holeCards || previousCurrentPlayer.holeCards.length === 0) {
+            return room;
+        }
+
+        return {
+            ...room,
+            players: room.players.map(player => {
+                if (player.id === currentPlayerId && (!player.holeCards || player.holeCards.length === 0)) {
+                    return {...player, holeCards: previousCurrentPlayer.holeCards};
+                }
+                return player;
+            })
+        };
+    }
+
+    function createCard(text, placeholder) {
+        const card = document.createElement("div");
+        card.className = `card${placeholder ? " placeholder" : ""}${/[♥♦]/.test(text) ? " red" : ""}`;
+        card.textContent = text;
+        return card;
+    }
+
+    function setBusy(button, busy) {
+        button.disabled = busy;
+    }
+
+    function showFloatingMessage(message) {
+        floatingMessage.textContent = message;
+        floatingMessage.classList.remove("show");
+        void floatingMessage.offsetWidth;
+        floatingMessage.classList.add("show");
+    }
+</script>
+</body>
+</html>

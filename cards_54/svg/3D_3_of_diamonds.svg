@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+  <rect width="100%" height="100%" fill="transparent"/>
+  <rect x="18" y="18" width="714" height="1014" rx="44" fill="#fffdf8" stroke="#1d1d1f" stroke-width="8"/>
+  <rect x="34" y="34" width="682" height="982" rx="32" fill="none" stroke="#e6e0d2" stroke-width="3"/>
+  <g transform="translate(86,106) rotate(0)">
+      <text x="0" y="0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="78" fill="#d71920">3</text>
+      <text x="0" y="78" text-anchor="middle" font-family="Times New Roman, serif" font-size="76" fill="#d71920">♦</text>
+    </g>
+  <g transform="translate(664,944) rotate(180)">
+      <text x="0" y="0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="78" fill="#d71920">3</text>
+      <text x="0" y="78" text-anchor="middle" font-family="Times New Roman, serif" font-size="76" fill="#d71920">♦</text>
+    </g>
+  <g><text x="375" y="262" text-anchor="middle" dominant-baseline="central" font-family="Times New Roman, serif" font-size="105" fill="#d71920">♦</text><text x="375" y="525" text-anchor="middle" dominant-baseline="central" font-family="Times New Roman, serif" font-size="105" fill="#d71920">♦</text><text x="375" y="787" text-anchor="middle" dominant-baseline="central" font-family="Times New Roman, serif" font-size="105" fill="#d71920">♦</text></g>
+</svg>

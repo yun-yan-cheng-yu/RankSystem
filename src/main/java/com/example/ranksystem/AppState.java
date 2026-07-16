@@ -1,0 +1,163 @@
+package com.example.ranksystem;
+
+import java.util.List;
+
+public final class AppState {
+    public static final LoginService LOGIN_SERVICE = new LoginService();
+    public static final PokerRoomService POKER_ROOM_SERVICE = new PokerRoomService(LOGIN_SERVICE);
+
+    private AppState() {
+    }
+
+    public static String snapshotJson() {
+        return "{\"type\":\"snapshot\",\"players\":"
+                + playersArrayJson(LOGIN_SERVICE.getOnlinePlayers())
+                + ",\"pokerTables\":"
+                + pokerTablesJson(POKER_ROOM_SERVICE.tableSummaries())
+                + ",\"pokerRoom\":"
+                + pokerRoomJson(POKER_ROOM_SERVICE.snapshot())
+                + "}";
+    }
+
+    public static String playersJson(List<PlayerSession> players) {
+        return "{\"players\":" + playersArrayJson(players) + "}";
+    }
+
+    public static String pokerRoomJson(PokerRoomSnapshot room) {
+        return pokerRoomJson(room, "");
+    }
+
+    public static String pokerRoomJson(PokerRoomSnapshot room, String viewerId) {
+        String normalizedViewerId = viewerId == null ? "" : viewerId.trim();
+        boolean revealAllHoleCards = room.finished() && room.communityCards().size() >= 5;
+        StringBuilder json = new StringBuilder("{\"tableId\":")
+                .append(room.tableId())
+                .append(",\"started\":")
+                .append(room.started())
+                .append(",\"canStart\":")
+                .append(room.canStart())
+                .append(",\"hostId\":\"")
+                .append(escapeJson(room.hostId()))
+                .append("\"")
+                .append(",\"dealerId\":\"")
+                .append(escapeJson(room.dealerId()))
+                .append("\"")
+                .append(",\"currentAggressorId\":\"")
+                .append(escapeJson(room.currentAggressorId()))
+                .append("\"")
+                .append(",\"currentTurnId\":\"")
+                .append(escapeJson(room.currentTurnId()))
+                .append("\"")
+                .append(",\"pot\":")
+                .append(room.pot())
+                .append(",\"currentBet\":")
+                .append(room.currentBet())
+                .append(",\"finished\":")
+                .append(room.finished())
+                .append(",\"winnerId\":\"")
+                .append(escapeJson(room.winnerId()))
+                .append("\"")
+                .append(",\"message\":\"")
+                .append(escapeJson(room.message()))
+                .append("\"")
+                .append(",\"aggressorOrder\":")
+                .append(stringArrayJson(room.aggressorOrder()))
+                .append(",\"completedAggressorIds\":")
+                .append(stringArrayJson(room.completedAggressorIds()))
+                .append(",\"communityCards\":")
+                .append(stringArrayJson(room.communityCards()))
+                .append(",\"rules\":")
+                .append(stringArrayJson(room.rules()))
+                .append(",\"players\":[");
+        for (int i = 0; i < room.players().size(); i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            PokerRoomPlayer player = room.players().get(i);
+            String handName = "";
+            List<String> bestCards = List.of();
+            if (revealAllHoleCards) {
+                handName = player.folded() ? "已弃牌" : PokerRoomService.bestHandName(player.holeCards(), room.communityCards());
+                bestCards = player.folded() ? List.of() : PokerRoomService.bestHandCards(player.holeCards(), room.communityCards());
+            }
+            json.append("{\"id\":\"")
+                    .append(escapeJson(player.playerId()))
+                    .append("\",\"ready\":")
+                    .append(player.ready())
+                    .append(",\"folded\":")
+                    .append(player.folded())
+                    .append(",\"chipsCommitted\":")
+                    .append(player.chipsCommitted())
+                    .append(",\"roundBet\":")
+                    .append(player.roundBet())
+                    .append(",\"acted\":")
+                    .append(player.acted())
+                    .append(",\"score\":")
+                    .append(player.score())
+                    .append(",\"handName\":\"")
+                    .append(escapeJson(handName))
+                    .append("\"")
+                    .append(",\"bestCards\":")
+                    .append(stringArrayJson(bestCards))
+                    .append(",\"holeCards\":")
+                    .append(stringArrayJson(revealAllHoleCards || player.playerId().equals(normalizedViewerId) ? player.holeCards() : List.of()))
+                    .append("}");
+        }
+        json.append("]}");
+        return json.toString();
+    }
+
+    public static String pokerTablesJson(List<PokerTableSummary> tables) {
+        StringBuilder json = new StringBuilder("{\"tables\":[");
+        for (int i = 0; i < tables.size(); i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            PokerTableSummary table = tables.get(i);
+            json.append("{\"id\":")
+                    .append(table.tableId())
+                    .append(",\"started\":")
+                    .append(table.started())
+                    .append(",\"finished\":")
+                    .append(table.finished())
+                    .append(",\"players\":")
+                    .append(stringArrayJson(table.playerIds()))
+                    .append("}");
+        }
+        json.append("]}");
+        return json.toString();
+    }
+
+    public static String escapeJson(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static String playersArrayJson(List<PlayerSession> players) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < players.size(); i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            PlayerSession player = players.get(i);
+            json.append("{\"id\":\"")
+                    .append(escapeJson(player.playerId()))
+                    .append("\",\"status\":\"")
+                    .append(escapeJson(player.status()))
+                    .append("\"}");
+        }
+        json.append("]");
+        return json.toString();
+    }
+
+    private static String stringArrayJson(List<String> values) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            json.append("\"").append(escapeJson(values.get(i))).append("\"");
+        }
+        json.append("]");
+        return json.toString();
+    }
+}
