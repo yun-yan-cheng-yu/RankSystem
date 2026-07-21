@@ -4,19 +4,77 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 public class LoginService {
     private final Map<String, PlayerSession> onlinePlayers = new ConcurrentHashMap<>();
+    private final Map<String, String> loginTokens = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastActiveAtMillis = new ConcurrentHashMap<>();
 
-    public void login(String playerId) {
+    public String login(String playerId) {
         String normalizedPlayerId = normalizePlayerId(playerId);
-        onlinePlayers.put(normalizedPlayerId, new PlayerSession(normalizedPlayerId, PlayerStatus.LOBBY));
+        String status = onlinePlayers.getOrDefault(
+                normalizedPlayerId,
+                new PlayerSession(normalizedPlayerId, PlayerStatus.LOBBY)
+        ).status();
+        String token = UUID.randomUUID().toString();
+        onlinePlayers.put(normalizedPlayerId, new PlayerSession(normalizedPlayerId, status));
+        loginTokens.put(normalizedPlayerId, token);
+        lastActiveAtMillis.put(normalizedPlayerId, System.currentTimeMillis());
+        return token;
     }
 
     public void logout(String playerId) {
         String normalizedPlayerId = normalizePlayerId(playerId);
         onlinePlayers.remove(normalizedPlayerId);
+        loginTokens.remove(normalizedPlayerId);
+        lastActiveAtMillis.remove(normalizedPlayerId);
+    }
+
+    public void validateToken(String playerId, String token) {
+        String normalizedPlayerId = normalizePlayerId(playerId);
+        String activeToken = loginTokens.get(normalizedPlayerId);
+        if (activeToken == null || token == null || token.isBlank()) {
+            throw new IllegalStateException("session expired");
+        }
+        if (!activeToken.equals(token)) {
+            throw new IllegalStateException("login replaced");
+        }
+    }
+
+    public boolean isValidToken(String playerId, String token) {
+        try {
+            validateToken(playerId, token);
+            return true;
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            return false;
+        }
+    }
+
+    public void touch(String playerId, String token) {
+        validateToken(playerId, token);
+        lastActiveAtMillis.put(normalizePlayerId(playerId), System.currentTimeMillis());
+    }
+
+    public List<String> expireIdlePlayers(long timeoutMillis, Predicate<String> exemptPlayer) {
+        return expireIdlePlayers(System.currentTimeMillis(), timeoutMillis, exemptPlayer);
+    }
+
+    List<String> expireIdlePlayers(long nowMillis, long timeoutMillis, Predicate<String> exemptPlayer) {
+        List<String> expiredPlayerIds = new ArrayList<>();
+        for (String playerId : onlinePlayers.keySet()) {
+            if (exemptPlayer.test(playerId)) {
+                continue;
+            }
+            long lastActiveAt = lastActiveAtMillis.getOrDefault(playerId, nowMillis);
+            if (nowMillis - lastActiveAt >= timeoutMillis) {
+                logout(playerId);
+                expiredPlayerIds.add(playerId);
+            }
+        }
+        return expiredPlayerIds;
     }
 
     public void updateStatus(String playerId, String status) {

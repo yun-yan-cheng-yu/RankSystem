@@ -234,6 +234,12 @@ public class PokerRoomService {
         return summaries;
     }
 
+    public synchronized boolean isPlayerInAnyTable(String playerId) {
+        String normalizedPlayerId = loginService.normalizePlayerId(playerId);
+        return tables.values().stream()
+                .anyMatch(targetTable -> targetTable.players.containsKey(normalizedPlayerId));
+    }
+
     private void leaveOtherTables(String playerId, int targetTableId) {
         for (TableState targetTable : tables.values()) {
             if (targetTable.tableId != targetTableId && targetTable.players.containsKey(playerId)) {

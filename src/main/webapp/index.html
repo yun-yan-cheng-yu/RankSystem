@@ -121,6 +121,10 @@
             white-space: pre-wrap;
         }
 
+        .control-panel {
+            min-width: 0;
+        }
+
         .room-actions {
             margin-top: 12px;
         }
@@ -515,20 +519,65 @@
 
         @media (max-width: 760px) {
             body.app-mode {
-                grid-template-columns: 1fr;
+                display: flex;
+                flex-direction: column;
             }
 
             body.app-mode main {
-                padding: 24px 16px;
+                order: 1;
+                padding: 20px 16px;
             }
 
             .sidebar {
+                order: 2;
+                margin: 0 16px 20px;
                 border-left: 0;
-                border-top: 1px solid #cbd5e1;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
             }
 
             .poker-layout {
-                grid-template-columns: 1fr;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .control-panel {
+                display: contents;
+            }
+
+            .table-panel {
+                order: 1;
+            }
+
+            .action-panel {
+                order: 2;
+                margin-top: 0;
+            }
+
+            .room-actions {
+                order: 3;
+                margin-top: 0;
+            }
+
+            #roomText {
+                order: 4;
+            }
+
+            #backToLobbyButton {
+                order: 5;
+            }
+
+            .rules-panel {
+                order: 6;
+            }
+
+            #pokerStatus {
+                order: 7;
+            }
+
+            .progress-panel {
+                margin-bottom: 12px;
             }
 
             .showdown-row {
@@ -545,12 +594,33 @@
             }
 
             .poker-table {
-                min-height: 680px;
-                border-radius: 26px;
+                min-height: min(520px, 72vh);
+                border-width: 10px;
+                border-radius: 22px;
             }
 
             .seat {
-                width: 136px;
+                width: 124px;
+                min-height: 88px;
+                padding: 8px;
+            }
+
+            .table-center {
+                width: min(280px, 66%);
+            }
+
+            .table-meta {
+                font-size: 13px;
+            }
+
+            .card {
+                width: 40px;
+                height: 56px;
+            }
+
+            .seat .card {
+                width: 30px;
+                height: 42px;
             }
         }
     </style>
@@ -580,7 +650,7 @@
             <div id="tableGrid" class="table-grid"></div>
         </section>
         <div id="gameArea" class="poker-layout hidden">
-            <div>
+            <div class="control-panel">
                 <div class="room-actions">
                     <button id="joinRoomButton" type="button">进入房间</button>
                     <button id="readyRoomButton" class="secondary hidden" type="button">准备</button>
@@ -636,8 +706,10 @@
 
 <script>
     const PLAYER_ID_STORAGE_KEY = "rankSystemPlayerId";
+    const TOKEN_STORAGE_KEY = "rankSystemLoginToken";
     const VIEW_STORAGE_KEY = "rankSystemView";
     const REALTIME_RECONNECT_DELAY_MS = 1000;
+    const SESSION_CHECK_INTERVAL_MS = 30000;
     const STATUS = {
         LOBBY: "在总大厅",
         GAME_A_ROOM: "在德州扑克房间"
@@ -683,6 +755,7 @@
     const floatingMessage = document.getElementById("floatingMessage");
 
     let currentPlayerId = "";
+    let currentLoginToken = "";
     let realtimeSocket = null;
     let currentPokerRoom = null;
     let currentTableId = 0;
@@ -690,9 +763,11 @@
     let selectedAggressorId = "";
     let selectedProgressRoundIndex = 0;
     let privateRoomRefreshing = false;
+    let sessionRefreshing = false;
 
     connectRealtime();
     restoreLogin();
+    setInterval(refreshSessionSoon, SESSION_CHECK_INTERVAL_MS);
 
     loginButton.addEventListener("click", async () => {
         const playerId = playerIdInput.value.trim();
@@ -705,8 +780,10 @@
         loginStatus.textContent = "登录中...";
 
         try {
-            await postForm("login", {id: playerId});
+            const data = await postForm("login", {id: playerId});
             sessionStorage.setItem(PLAYER_ID_STORAGE_KEY, playerId);
+            sessionStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+            currentLoginToken = data.token;
             showLobby(playerId);
             await refreshAllPlayers();
         } catch (error) {
@@ -747,7 +824,7 @@
             if (currentTableId) {
                 await postForm("poker-room/leave", withTable({id: currentPlayerId}));
             }
-            await postForm("state", {id: currentPlayerId, state: STATUS.LOBBY});
+            await postForm("state", withSession({id: currentPlayerId, state: STATUS.LOBBY}));
             currentTableId = 0;
             currentPokerRoom = null;
             showLobby(currentPlayerId);
@@ -764,10 +841,9 @@
         sidebarStatus.textContent = "登出中...";
 
         try {
-            await postForm("logout", {id: currentPlayerId});
-            sessionStorage.removeItem(PLAYER_ID_STORAGE_KEY);
-            sessionStorage.removeItem(VIEW_STORAGE_KEY);
-            showLogin();
+            await postForm("logout", withSession({id: currentPlayerId}));
+            clearStoredLogin();
+            showLogin("账号已登出");
         } catch (error) {
             sidebarStatus.textContent = `登出失败: ${error.message}`;
         } finally {
@@ -896,16 +972,16 @@
 
     async function restoreLogin() {
         const savedPlayerId = sessionStorage.getItem(PLAYER_ID_STORAGE_KEY);
-        if (!savedPlayerId) {
+        const savedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+        if (!savedPlayerId || !savedToken) {
             showLogin();
             return;
         }
 
+        currentLoginToken = savedToken;
         loginStatus.textContent = "恢复登录中...";
         try {
-            if (!await isOnline(savedPlayerId)) {
-                await postForm("login", {id: savedPlayerId});
-            }
+            await getJson(`session?id=${encodeURIComponent(savedPlayerId)}&token=${encodeURIComponent(savedToken)}`);
             const savedView = sessionStorage.getItem(VIEW_STORAGE_KEY);
             if (savedView === "poker") {
                 showPoker(savedPlayerId);
@@ -915,14 +991,13 @@
             }
             await refreshAllPlayers();
         } catch (error) {
-            sessionStorage.removeItem(PLAYER_ID_STORAGE_KEY);
-            sessionStorage.removeItem(VIEW_STORAGE_KEY);
-            showLogin();
+            clearStoredLogin();
+            showLogin("登录已失效，请重新登录");
             loginStatus.textContent = "登录已失效，请重新登录";
         }
     }
 
-    function showLogin() {
+    function showLogin(message = "") {
         currentPlayerId = "";
         document.body.className = "login-mode";
         loginView.classList.remove("hidden");
@@ -931,6 +1006,7 @@
         playerIdInput.value = "";
         allPlayersText.value = "";
         sidebarStatus.textContent = "";
+        loginStatus.textContent = message;
         playerIdInput.focus();
     }
 
@@ -964,7 +1040,7 @@
             updateRoom(emptyRoom());
             return;
         }
-        const room = await getJson(`poker-room?id=${encodeURIComponent(currentPlayerId)}&table=${currentTableId}`);
+        const room = await getJson(`poker-room?id=${encodeURIComponent(currentPlayerId)}&token=${encodeURIComponent(currentLoginToken)}&table=${currentTableId}`);
         updateRoom(room);
     }
 
@@ -1048,16 +1124,27 @@
 
         if (!response.ok) {
             const data = await response.json().catch(() => ({message: `HTTP ${response.status}`}));
-            throw new Error(data.message || `HTTP ${response.status}`);
+            throwHttpError(response.status, data.message || `HTTP ${response.status}`);
         }
+        return response.json().catch(() => ({success: true}));
     }
 
     async function getJson(url) {
         const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const data = await response.json().catch(() => ({message: `HTTP ${response.status}`}));
+            throwHttpError(response.status, data.message || `HTTP ${response.status}`);
         }
         return response.json();
+    }
+
+    function throwHttpError(status, message) {
+        const error = new Error(message);
+        error.status = status;
+        if (status === 401 && currentPlayerId) {
+            handleSessionExpired(message);
+        }
+        throw error;
     }
 
     function connectRealtime() {
@@ -1083,6 +1170,14 @@
     function applySnapshot(snapshot) {
         if (snapshot.players) {
             allPlayersText.value = formatPlayers(snapshot.players, "当前没有已登录玩家");
+            if (currentPlayerId && !snapshot.players.some(player => player.id === currentPlayerId)) {
+                clearStoredLogin();
+                showLogin("该账号已在其他端登出");
+                return;
+            }
+            if (currentPlayerId) {
+                refreshSessionSoon();
+            }
         }
 
         if (snapshot.pokerRoom && !pokerView.classList.contains("hidden")) {
@@ -1111,6 +1206,38 @@
     async function isOnline(playerId) {
         const data = await getJson("players");
         return data.players.some(player => player.id === playerId);
+    }
+
+    function clearStoredLogin() {
+        sessionStorage.removeItem(PLAYER_ID_STORAGE_KEY);
+        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+        sessionStorage.removeItem(VIEW_STORAGE_KEY);
+        currentLoginToken = "";
+    }
+
+    function handleSessionExpired(reason = "") {
+        clearStoredLogin();
+        const message = reason === "login replaced"
+                ? "该账号已在其他端登录，本端已下线"
+                : "长时间未操作，已自动退出";
+        showLogin(message);
+    }
+
+    async function refreshSessionSoon() {
+        if (sessionRefreshing || !currentPlayerId || !currentLoginToken) {
+            return;
+        }
+
+        sessionRefreshing = true;
+        try {
+            await getJson(`session?id=${encodeURIComponent(currentPlayerId)}&token=${encodeURIComponent(currentLoginToken)}`);
+        } catch (error) {
+            if (error.status === 401) {
+                handleSessionExpired(error.message);
+            }
+        } finally {
+            sessionRefreshing = false;
+        }
     }
 
     function formatPlayers(players, emptyText) {
@@ -1157,7 +1284,11 @@
     }
 
     function withTable(fields) {
-        return {...fields, table: currentTableId || 1};
+        return {...withSession(fields), table: currentTableId || 1};
+    }
+
+    function withSession(fields) {
+        return {...fields, token: currentLoginToken};
     }
 
     function emptyRoom() {
@@ -1553,6 +1684,10 @@
         privateRoomRefreshing = true;
         try {
             await refreshRoom();
+        } catch (error) {
+            if (error.status === 401) {
+                handleSessionExpired();
+            }
         } finally {
             privateRoomRefreshing = false;
         }

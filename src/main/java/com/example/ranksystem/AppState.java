@@ -3,6 +3,7 @@ package com.example.ranksystem;
 import java.util.List;
 
 public final class AppState {
+    public static final long IDLE_TIMEOUT_MILLIS = 30L * 60L * 1000L;
     public static final LoginService LOGIN_SERVICE = new LoginService();
     public static final PokerRoomService POKER_ROOM_SERVICE = new PokerRoomService(LOGIN_SERVICE);
 
@@ -10,6 +11,7 @@ public final class AppState {
     }
 
     public static String snapshotJson() {
+        expireIdlePlayers();
         return "{\"type\":\"snapshot\",\"players\":"
                 + playersArrayJson(LOGIN_SERVICE.getOnlinePlayers())
                 + ",\"pokerTables\":"
@@ -21,6 +23,13 @@ public final class AppState {
 
     public static String playersJson(List<PlayerSession> players) {
         return "{\"players\":" + playersArrayJson(players) + "}";
+    }
+
+    public static boolean expireIdlePlayers() {
+        return !LOGIN_SERVICE.expireIdlePlayers(
+                IDLE_TIMEOUT_MILLIS,
+                POKER_ROOM_SERVICE::isPlayerInAnyTable
+        ).isEmpty();
     }
 
     public static String pokerRoomJson(PokerRoomSnapshot room) {

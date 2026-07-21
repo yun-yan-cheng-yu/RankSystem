@@ -13,6 +13,7 @@ import java.util.List;
 @WebServlet(urlPatterns = {
         "/login",
         "/logout",
+        "/session",
         "/state",
         "/players",
         "/poker-tables",
@@ -30,46 +31,63 @@ public class LoginServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        expireIdlePlayers();
         String path = request.getServletPath();
-        if ("/players".equals(path)) {
-            String game = request.getParameter("game");
-            List<PlayerSession> players = game == null
-                    ? AppState.LOGIN_SERVICE.getOnlinePlayers()
-                    : AppState.LOGIN_SERVICE.getPlayersByGame(game);
-            writeJson(response, 200, AppState.playersJson(players));
-            return;
-        }
+        try {
+            if ("/players".equals(path)) {
+                String game = request.getParameter("game");
+                List<PlayerSession> players = game == null
+                        ? AppState.LOGIN_SERVICE.getOnlinePlayers()
+                        : AppState.LOGIN_SERVICE.getPlayersByGame(game);
+                writeJson(response, 200, AppState.playersJson(players));
+                return;
+            }
 
-        if ("/poker-tables".equals(path)) {
-            writeJson(response, 200, AppState.pokerTablesJson(AppState.POKER_ROOM_SERVICE.tableSummaries()));
-            return;
-        }
+            if ("/session".equals(path)) {
+                validateSession(request);
+                writeJson(response, 200, "{\"success\":true}");
+                return;
+            }
 
-        if ("/poker-room".equals(path)) {
-            writeJson(response, 200, AppState.pokerRoomJson(
-                    AppState.POKER_ROOM_SERVICE.snapshot(tableId(request)),
-                    request.getParameter("id")
-            ));
-            return;
-        }
+            if ("/poker-tables".equals(path)) {
+                writeJson(response, 200, AppState.pokerTablesJson(AppState.POKER_ROOM_SERVICE.tableSummaries()));
+                return;
+            }
 
-        writeJson(response, 404, "{\"success\":false,\"message\":\"not found\"}");
+            if ("/poker-room".equals(path)) {
+                validateSession(request);
+                writeJson(response, 200, AppState.pokerRoomJson(
+                        AppState.POKER_ROOM_SERVICE.snapshot(tableId(request)),
+                        request.getParameter("id")
+                ));
+                return;
+            }
+
+            writeJson(response, 404, "{\"success\":false,\"message\":\"not found\"}");
+        } catch (IllegalArgumentException exception) {
+            writeJson(response, 400, "{\"success\":false,\"message\":\"" + AppState.escapeJson(exception.getMessage()) + "\"}");
+        } catch (IllegalStateException exception) {
+            int status = isSessionError(exception) ? 401 : 409;
+            writeJson(response, status, "{\"success\":false,\"message\":\"" + AppState.escapeJson(exception.getMessage()) + "\"}");
+        }
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        expireIdlePlayers();
         String path = request.getServletPath();
 
         try {
             if ("/login".equals(path)) {
-                AppState.LOGIN_SERVICE.login(request.getParameter("id"));
-                writeJson(response, 200, "{\"success\":true}");
+                String token = AppState.LOGIN_SERVICE.login(request.getParameter("id"));
+                writeJson(response, 200, "{\"success\":true,\"token\":\"" + AppState.escapeJson(token) + "\"}");
                 RealtimeEndpoint.broadcastSnapshot();
                 return;
             }
 
             if ("/logout".equals(path)) {
+                validateSession(request, false);
                 String playerId = request.getParameter("id");
                 AppState.POKER_ROOM_SERVICE.leaveAnyTable(playerId);
                 AppState.LOGIN_SERVICE.logout(playerId);
@@ -79,6 +97,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/state".equals(path)) {
+                validateSession(request, true);
                 AppState.LOGIN_SERVICE.updateStatus(request.getParameter("id"), request.getParameter("state"));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -86,6 +105,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/join".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.join(request.getParameter("id"), tableId(request));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -93,6 +113,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/ready".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.ready(request.getParameter("id"), tableId(request));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -100,6 +121,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/unready".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.unready(request.getParameter("id"), tableId(request));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -107,6 +129,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/start".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.start(request.getParameter("id"), tableId(request));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -114,6 +137,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/next".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.nextHand(request.getParameter("id"), tableId(request));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -121,6 +145,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/leave".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.leave(request.getParameter("id"), tableId(request));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -128,6 +153,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/fold".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.fold(request.getParameter("id"), tableId(request));
                 writeJson(response, 200, "{\"success\":true}");
                 RealtimeEndpoint.broadcastSnapshot();
@@ -135,6 +161,7 @@ public class LoginServlet extends HttpServlet {
             }
 
             if ("/poker-room/bet".equals(path)) {
+                validateSession(request, true);
                 AppState.POKER_ROOM_SERVICE.bet(
                         request.getParameter("id"),
                         Integer.parseInt(request.getParameter("chips")),
@@ -149,7 +176,8 @@ public class LoginServlet extends HttpServlet {
         } catch (IllegalArgumentException exception) {
             writeJson(response, 400, "{\"success\":false,\"message\":\"" + AppState.escapeJson(exception.getMessage()) + "\"}");
         } catch (IllegalStateException exception) {
-            writeJson(response, 409, "{\"success\":false,\"message\":\"" + AppState.escapeJson(exception.getMessage()) + "\"}");
+            int status = isSessionError(exception) ? 401 : 409;
+            writeJson(response, status, "{\"success\":false,\"message\":\"" + AppState.escapeJson(exception.getMessage()) + "\"}");
         }
     }
 
@@ -167,5 +195,28 @@ public class LoginServlet extends HttpServlet {
             return 1;
         }
         return Integer.parseInt(value);
+    }
+
+    private void validateSession(HttpServletRequest request) {
+        AppState.LOGIN_SERVICE.validateToken(request.getParameter("id"), request.getParameter("token"));
+    }
+
+    private void validateSession(HttpServletRequest request, boolean touch) {
+        if (touch) {
+            AppState.LOGIN_SERVICE.touch(request.getParameter("id"), request.getParameter("token"));
+        } else {
+            validateSession(request);
+        }
+    }
+
+    private boolean isSessionError(IllegalStateException exception) {
+        return "session expired".equals(exception.getMessage())
+                || "login replaced".equals(exception.getMessage());
+    }
+
+    private void expireIdlePlayers() {
+        if (AppState.expireIdlePlayers()) {
+            RealtimeEndpoint.broadcastSnapshot();
+        }
     }
 }
