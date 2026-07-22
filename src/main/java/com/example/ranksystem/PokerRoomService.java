@@ -227,6 +227,8 @@ public class PokerRoomService {
             summaries.add(new PokerTableSummary(
                     targetTable.tableId,
                     targetTable.players.keySet().stream().toList(),
+                    hostId(targetTable),
+                    new ArrayList<>(targetTable.players.values()),
                     targetTable.started,
                     targetTable.finished
             ));
@@ -238,6 +240,15 @@ public class PokerRoomService {
         String normalizedPlayerId = loginService.normalizePlayerId(playerId);
         return tables.values().stream()
                 .anyMatch(targetTable -> targetTable.players.containsKey(normalizedPlayerId));
+    }
+
+    public synchronized int tableIdForPlayer(String playerId) {
+        String normalizedPlayerId = loginService.normalizePlayerId(playerId);
+        return tables.values().stream()
+                .filter(targetTable -> targetTable.players.containsKey(normalizedPlayerId))
+                .map(targetTable -> targetTable.tableId)
+                .findFirst()
+                .orElse(0);
     }
 
     private void leaveOtherTables(String playerId, int targetTableId) {

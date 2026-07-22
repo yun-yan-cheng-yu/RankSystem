@@ -166,11 +166,33 @@ public final class AppState {
                     .append(table.started())
                     .append(",\"finished\":")
                     .append(table.finished())
+                    .append(",\"hostId\":\"")
+                    .append(escapeJson(table.hostId()))
+                    .append("\"")
                     .append(",\"players\":")
                     .append(stringArrayJson(table.playerIds()))
+                    .append(",\"playerDetails\":")
+                    .append(tablePlayerDetailsJson(table.players()))
                     .append("}");
         }
         json.append("]}");
+        return json.toString();
+    }
+
+    private static String tablePlayerDetailsJson(List<PokerRoomPlayer> players) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < players.size(); i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            PokerRoomPlayer player = players.get(i);
+            json.append("{\"id\":\"")
+                    .append(escapeJson(player.playerId()))
+                    .append("\",\"ready\":")
+                    .append(player.ready())
+                    .append("}");
+        }
+        json.append("]");
         return json.toString();
     }
 
@@ -189,7 +211,9 @@ public final class AppState {
                     .append(escapeJson(player.playerId()))
                     .append("\",\"status\":\"")
                     .append(escapeJson(player.status()))
-                    .append("\"}");
+                    .append("\",\"tableId\":")
+                    .append(POKER_ROOM_SERVICE.tableIdForPlayer(player.playerId()))
+                    .append("}");
         }
         json.append("]");
         return json.toString();

@@ -24,6 +24,10 @@
             min-height: 100vh;
         }
 
+        body.app-mode.sidebar-hidden {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
         main {
             width: min(520px, calc(100vw - 32px));
         }
@@ -111,6 +115,10 @@
             display: block;
         }
 
+        body.app-mode.sidebar-hidden .sidebar {
+            display: none;
+        }
+
         .sidebar h2 {
             margin: 0 0 12px;
             font-size: 18px;
@@ -118,7 +126,41 @@
 
         .player-list {
             min-height: 220px;
-            white-space: pre-wrap;
+            display: grid;
+            align-content: start;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #475569;
+        }
+
+        .player-status-row {
+            display: grid;
+            grid-template-columns: minmax(0, 52px) minmax(0, 1fr) minmax(0, 56px);
+            gap: 10px;
+            align-items: start;
+            line-height: 1.35;
+        }
+
+        .player-status-name {
+            overflow: hidden;
+            color: #1f2937;
+            font-weight: 700;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .player-status-value {
+            color: #64748b;
+        }
+
+        .player-status-room {
+            color: #475569;
+            text-align: right;
+            white-space: nowrap;
         }
 
         .control-panel {
@@ -136,12 +178,34 @@
             align-items: start;
         }
 
-        .rules-panel {
+        .rules-popover {
+            position: relative;
             margin-top: 16px;
+        }
+
+        .rules-button {
+            background: #475569;
+        }
+
+        .rules-panel {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            z-index: 5;
+            display: none;
+            width: min(420px, calc(100vw - 48px));
+            max-height: min(420px, 70vh);
+            overflow: auto;
             padding: 16px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
             background: white;
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+        }
+
+        .rules-popover:hover .rules-panel,
+        .rules-popover:focus-within .rules-panel {
+            display: block;
         }
 
         .action-panel {
@@ -187,8 +251,33 @@
             box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
         }
 
+        .table-card.started {
+            border-color: #f97316;
+            background: #fff7ed;
+            box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+        }
+
         .table-card-title {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
             font-weight: 700;
+        }
+
+        .table-state-badge {
+            flex: none;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .table-state-badge.started {
+            background: #f97316;
+            color: white;
         }
 
         .table-card-players {
@@ -196,6 +285,35 @@
             color: #64748b;
             font-size: 13px;
             line-height: 1.35;
+        }
+
+        .table-card-meta {
+            margin-top: 6px;
+            color: #475569;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .table-player-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .table-player-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .table-player-ready {
+            color: #16a34a;
+            font-weight: 700;
+        }
+
+        .table-player-unready {
+            color: #94a3b8;
         }
 
         .rules-panel h2,
@@ -211,14 +329,19 @@
         }
 
         .table-panel {
+            width: 100%;
             min-width: 0;
         }
 
         .poker-table {
             position: relative;
-            min-height: 540px;
+            width: 100%;
+            max-width: 900px;
+            min-height: 520px;
+            aspect-ratio: 16 / 10;
+            box-sizing: border-box;
             border: 12px solid #7c4a23;
-            border-radius: 50%;
+            border-radius: 28px;
             background: radial-gradient(circle at center, #1f8a5b 0, #166746 64%, #0f4f37 100%);
             box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.18), 0 18px 36px rgba(15, 23, 42, 0.18);
             overflow: hidden;
@@ -323,7 +446,8 @@
         }
 
         .progress-panel {
-            margin-bottom: 16px;
+            grid-column: 1 / -1;
+            margin-top: 0;
             padding: 14px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
@@ -514,7 +638,7 @@
         }
 
         .hidden {
-            display: none;
+            display: none !important;
         }
 
         @media (max-width: 760px) {
@@ -540,6 +664,7 @@
                 display: flex;
                 flex-direction: column;
                 gap: 16px;
+                width: 100%;
             }
 
             .control-panel {
@@ -548,6 +673,8 @@
 
             .table-panel {
                 order: 1;
+                width: 100%;
+                min-width: 0;
             }
 
             .action-panel {
@@ -555,29 +682,35 @@
                 margin-top: 0;
             }
 
-            .room-actions {
+            .progress-panel {
                 order: 3;
+            }
+
+            .room-actions {
+                order: 4;
                 margin-top: 0;
             }
 
             #roomText {
-                order: 4;
-            }
-
-            #backToLobbyButton {
                 order: 5;
             }
 
-            .rules-panel {
+            #backToLobbyButton {
                 order: 6;
             }
 
-            #pokerStatus {
+            .rules-popover {
                 order: 7;
             }
 
-            .progress-panel {
-                margin-bottom: 12px;
+            .rules-panel {
+                left: 0;
+                bottom: calc(100% + 8px);
+                width: min(420px, calc(100vw - 64px));
+            }
+
+            #pokerStatus {
+                order: 8;
             }
 
             .showdown-row {
@@ -594,6 +727,8 @@
             }
 
             .poker-table {
+                width: 100%;
+                box-sizing: border-box;
                 min-height: min(520px, 72vh);
                 border-width: 10px;
                 border-radius: 22px;
@@ -666,19 +801,17 @@
                     <button id="betButton" type="button">押注</button>
                     <button id="foldButton" class="danger" type="button">弃牌</button>
                 </section>
-                <section class="rules-panel">
-                    <h2>房间规则</h2>
-                    <ol id="pokerRulesList"></ol>
-                </section>
+                <div class="rules-popover">
+                    <button id="rulesButton" class="rules-button" type="button">房间规则</button>
+                    <section class="rules-panel">
+                        <h2>房间规则</h2>
+                        <ol id="pokerRulesList"></ol>
+                    </section>
+                </div>
                 <div id="pokerStatus" class="status"></div>
             </div>
             <div class="table-panel">
                 <h2>游戏区</h2>
-                <section class="progress-panel">
-                    <h2>游戏进度</h2>
-                    <div id="gameProgress" class="progress-list"></div>
-                    <div id="subProgress" class="sub-progress hidden"></div>
-                </section>
                 <div id="pokerTable" class="poker-table">
                     <div class="table-center">
                         <div id="tableMeta" class="table-meta"></div>
@@ -690,15 +823,18 @@
                     <div id="showdownList" class="showdown-list"></div>
                 </section>
             </div>
+            <section class="progress-panel">
+                <h2>游戏进度</h2>
+                <div id="gameProgress" class="progress-list"></div>
+            </section>
         </div>
     </section>
 </main>
 
 <aside id="sidebar" class="sidebar">
-    <h2>功能区</h2>
-    <button id="sidebarRefreshButton" class="secondary" type="button">查看已经登录的所有人以及状态</button>
+    <h2>玩家状态</h2>
     <button id="logoutButton" class="danger" type="button">登出</button>
-    <textarea id="allPlayersText" class="player-list" readonly></textarea>
+    <div id="allPlayersText" class="player-list"></div>
     <div id="sidebarStatus" class="status"></div>
 </aside>
 
@@ -730,7 +866,7 @@
     const betButton = document.getElementById("betButton");
     const foldButton = document.getElementById("foldButton");
     const logoutButton = document.getElementById("logoutButton");
-    const sidebarRefreshButton = document.getElementById("sidebarRefreshButton");
+    const sidebar = document.getElementById("sidebar");
     const currentPlayer = document.getElementById("currentPlayer");
     const pokerPlayerStatus = document.getElementById("pokerPlayerStatus");
     const loginStatus = document.getElementById("loginStatus");
@@ -749,7 +885,6 @@
     const tableMeta = document.getElementById("tableMeta");
     const communityCards = document.getElementById("communityCards");
     const gameProgress = document.getElementById("gameProgress");
-    const subProgress = document.getElementById("subProgress");
     const showdownPanel = document.getElementById("showdownPanel");
     const showdownList = document.getElementById("showdownList");
     const floatingMessage = document.getElementById("floatingMessage");
@@ -760,8 +895,6 @@
     let currentPokerRoom = null;
     let currentTableId = 0;
     let currentPokerTables = [];
-    let selectedAggressorId = "";
-    let selectedProgressRoundIndex = 0;
     let privateRoomRefreshing = false;
     let sessionRefreshing = false;
 
@@ -785,7 +918,7 @@
             sessionStorage.setItem(TOKEN_STORAGE_KEY, data.token);
             currentLoginToken = data.token;
             showLobby(playerId);
-            await refreshAllPlayers();
+            refreshAllPlayers();
         } catch (error) {
             loginStatus.textContent = `登录失败: ${error.message}`;
         } finally {
@@ -800,7 +933,7 @@
         try {
             showPoker();
             await refreshTables();
-            await refreshAllPlayers();
+            refreshAllPlayers();
         } catch (error) {
             lobbyStatus.textContent = `进入失败: ${error.message}`;
         } finally {
@@ -828,7 +961,7 @@
             currentTableId = 0;
             currentPokerRoom = null;
             showLobby(currentPlayerId);
-            await refreshAllPlayers();
+            refreshAllPlayers();
         } catch (error) {
             pokerStatus.textContent = `返回失败: ${error.message}`;
         } finally {
@@ -851,8 +984,6 @@
         }
     });
 
-    sidebarRefreshButton.addEventListener("click", refreshAllPlayers);
-
     joinRoomButton.addEventListener("click", async () => {
         if (!currentTableId) {
             pokerStatus.textContent = "请先选择桌子";
@@ -865,7 +996,7 @@
             await joinTable(currentTableId);
             await refreshRoom();
             await refreshTables();
-            await refreshAllPlayers();
+            refreshAllPlayers();
             pokerStatus.textContent = "";
         } catch (error) {
             pokerStatus.textContent = `进入桌子失败: ${error.message}`;
@@ -899,7 +1030,7 @@
         try {
             await postForm(nextHand ? "poker-room/next" : "poker-room/start", withTable({id: currentPlayerId}));
             await refreshRoom();
-            await refreshAllPlayers();
+            refreshAllPlayers();
             pokerStatus.textContent = "";
         } catch (error) {
             pokerStatus.textContent = `${nextHand ? "下一局" : "开始"}失败: ${error.message}`;
@@ -922,7 +1053,7 @@
             currentPokerRoom = null;
             await refreshRoom();
             await refreshTables();
-            await refreshAllPlayers();
+            refreshAllPlayers();
             pokerStatus.textContent = "";
         } catch (error) {
             pokerStatus.textContent = `离开失败: ${error.message}`;
@@ -989,7 +1120,7 @@
             } else {
                 showLobby(savedPlayerId);
             }
-            await refreshAllPlayers();
+            refreshAllPlayers();
         } catch (error) {
             clearStoredLogin();
             showLogin("登录已失效，请重新登录");
@@ -1004,7 +1135,8 @@
         lobbyView.classList.add("hidden");
         pokerView.classList.add("hidden");
         playerIdInput.value = "";
-        allPlayersText.value = "";
+        renderPlayers([], "");
+        currentTableId = 0;
         sidebarStatus.textContent = "";
         loginStatus.textContent = message;
         playerIdInput.focus();
@@ -1017,6 +1149,7 @@
         loginView.classList.add("hidden");
         lobbyView.classList.remove("hidden");
         pokerView.classList.add("hidden");
+        setSidebarHidden(false);
         currentPlayer.textContent = `当前玩家：${currentPlayerId} / ${STATUS.LOBBY}`;
         loginStatus.textContent = "";
         lobbyStatus.textContent = "";
@@ -1029,6 +1162,7 @@
         loginView.classList.add("hidden");
         lobbyView.classList.add("hidden");
         pokerView.classList.remove("hidden");
+        setSidebarHidden(false);
         pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_ROOM}`;
         pokerStatus.textContent = "";
         currentTableId = 0;
@@ -1074,12 +1208,13 @@
         const canStartNextHand = Boolean(room.started && room.finished && currentPlayerId === nextDealerId);
 
         tableListPanel.classList.toggle("hidden", tableLocked);
-        gameArea.classList.toggle("hidden", !currentTableId);
+        gameArea.classList.toggle("hidden", !inRoom);
         roomText.value = formatRoom(room);
         renderRules(room.rules || []);
         renderPokerTable(room);
         renderShowdown(room);
         renderProgress(room);
+        setSidebarHidden(room.started && !room.finished && inRoom);
         joinRoomButton.classList.toggle("hidden", inRoom);
         readyRoomButton.classList.toggle("hidden", !inRoom || room.started);
         readyRoomButton.textContent = currentPlayer?.ready ? "取消准备" : "准备";
@@ -1100,17 +1235,12 @@
     }
 
     async function refreshAllPlayers() {
-        setBusy(sidebarRefreshButton, true);
-        sidebarStatus.textContent = "查询中...";
-
         try {
             const data = await getJson("players");
-            allPlayersText.value = formatPlayers(data.players, "当前没有已登录玩家");
+            renderPlayers(data.players, "当前没有已登录玩家");
             sidebarStatus.textContent = "";
         } catch (error) {
             sidebarStatus.textContent = `查询失败: ${error.message}`;
-        } finally {
-            setBusy(sidebarRefreshButton, false);
         }
     }
 
@@ -1169,7 +1299,7 @@
 
     function applySnapshot(snapshot) {
         if (snapshot.players) {
-            allPlayersText.value = formatPlayers(snapshot.players, "当前没有已登录玩家");
+            renderPlayers(snapshot.players, "当前没有已登录玩家");
             if (currentPlayerId && !snapshot.players.some(player => player.id === currentPlayerId)) {
                 clearStoredLogin();
                 showLogin("该账号已在其他端登出");
@@ -1240,11 +1370,39 @@
         }
     }
 
-    function formatPlayers(players, emptyText) {
+    function renderPlayers(players, emptyText) {
+        allPlayersText.innerHTML = "";
         if (!players || players.length === 0) {
-            return emptyText;
+            allPlayersText.textContent = emptyText;
+            return;
         }
-        return players.map(player => `${player.id}：${player.status}`).join("\n");
+        players.forEach(player => {
+            const row = document.createElement("div");
+            row.className = "player-status-row";
+
+            const name = document.createElement("div");
+            name.className = "player-status-name";
+            name.title = player.id;
+            name.textContent = player.id;
+            row.appendChild(name);
+
+            const status = document.createElement("div");
+            status.className = "player-status-value";
+            status.textContent = player.status;
+            row.appendChild(status);
+
+            const room = document.createElement("div");
+            room.className = "player-status-room";
+            room.textContent = player.tableId ? `${player.tableId}号桌` : "-";
+            row.appendChild(room);
+
+            allPlayersText.appendChild(row);
+        });
+    }
+
+    function setSidebarHidden(hidden) {
+        sidebar.classList.toggle("hidden", hidden);
+        document.body.classList.toggle("sidebar-hidden", hidden);
     }
 
     function renderTables(tables) {
@@ -1252,17 +1410,50 @@
         tables.forEach(table => {
             const card = document.createElement("button");
             card.type = "button";
-            card.className = `table-card${table.id === currentTableId ? " active" : ""}`;
+            card.className = `table-card${table.id === currentTableId ? " active" : ""}${table.started && !table.finished ? " started" : ""}`;
 
             const title = document.createElement("div");
             title.className = "table-card-title";
-            title.textContent = `${table.id} 号桌 (${table.players.length}/10)`;
+            const titleText = document.createElement("span");
+            titleText.textContent = `${table.id} 号桌 (${table.players.length}/10)`;
+            title.appendChild(titleText);
+
+            const stateBadge = document.createElement("span");
+            stateBadge.className = `table-state-badge${table.started && !table.finished ? " started" : ""}`;
+            stateBadge.textContent = table.started && !table.finished ? "游戏中" : table.finished ? "已结束" : "等待中";
+            title.appendChild(stateBadge);
             card.appendChild(title);
 
-            const players = document.createElement("div");
-            players.className = "table-card-players";
-            players.textContent = table.players.length > 0 ? table.players.join("、") : "空桌";
-            card.appendChild(players);
+            const meta = document.createElement("div");
+            meta.className = "table-card-meta";
+            meta.textContent = `房主：${table.hostId || "无"}`;
+            card.appendChild(meta);
+
+            const players = table.playerDetails || [];
+            const playerList = document.createElement("div");
+            playerList.className = "table-card-players";
+            if (players.length === 0) {
+                playerList.textContent = "空桌";
+            } else {
+                players.forEach(player => {
+                    const row = document.createElement("div");
+                    row.className = "table-player-row";
+
+                    const name = document.createElement("span");
+                    name.className = "table-player-name";
+                    name.title = player.id;
+                    name.textContent = `${player.id}${player.id === table.hostId ? "（房主）" : ""}`;
+                    row.appendChild(name);
+
+                    const ready = document.createElement("span");
+                    ready.className = player.ready ? "table-player-ready" : "table-player-unready";
+                    ready.textContent = player.ready ? "已准备" : "未准备";
+                    row.appendChild(ready);
+
+                    playerList.appendChild(row);
+                });
+            }
+            card.appendChild(playerList);
 
             card.addEventListener("click", async () => {
                 const currentPlayer = currentPokerRoom?.players?.find(player => player.id === currentPlayerId);
@@ -1479,17 +1670,9 @@
         const completed = new Set(room.completedAggressorIds || []);
         const completedRoundCount = completedBettingRoundCount(room);
         const currentRoundIndex = Math.min(completedRoundCount, 3);
-        if (!selectedAggressorId || !order.includes(selectedAggressorId)) {
-            selectedAggressorId = room.currentAggressorId || order[0] || "";
-        }
-        if (selectedProgressRoundIndex < 0 || selectedProgressRoundIndex > 3) {
-            selectedProgressRoundIndex = currentRoundIndex;
-        }
 
         if (order.length === 0) {
             gameProgress.textContent = "游戏开始后显示押注阶段";
-            subProgress.classList.add("hidden");
-            subProgress.innerHTML = "";
             return;
         }
 
@@ -1509,6 +1692,7 @@
                 const node = document.createElement("button");
                 node.type = "button";
                 node.className = "progress-node";
+                node.disabled = true;
                 if (player?.folded) {
                     node.classList.add("folded");
                 } else if (roundIndex < completedRoundCount || (roundIndex === currentRoundIndex && completed.has(playerId))) {
@@ -1517,11 +1701,6 @@
                     node.classList.add("active");
                 }
                 node.textContent = `${playerId} 押注`;
-                node.addEventListener("click", () => {
-                    selectedProgressRoundIndex = roundIndex;
-                    selectedAggressorId = playerId;
-                    renderSubProgress(room, roundIndex, playerId);
-                });
                 track.appendChild(node);
             });
 
@@ -1533,60 +1712,6 @@
             round.appendChild(track);
             gameProgress.appendChild(round);
         }
-
-        renderSubProgress(room, selectedProgressRoundIndex, selectedAggressorId);
-    }
-
-    function renderSubProgress(room, roundIndex, aggressorId) {
-        const completed = new Set(room.completedAggressorIds || []);
-        const completedRoundCount = completedBettingRoundCount(room);
-        const currentRoundIndex = Math.min(completedRoundCount, 3);
-        subProgress.classList.remove("hidden");
-        subProgress.innerHTML = "";
-
-        const title = document.createElement("div");
-        title.className = "sub-progress-title";
-        if (roundIndex < completedRoundCount || room.finished) {
-            title.textContent = `${bettingRoundName(roundIndex)}：${aggressorId} 的押注阶段已完成`;
-        } else if (roundIndex > currentRoundIndex || aggressorId !== room.currentAggressorId) {
-            title.textContent = `${aggressorId} 的押注阶段尚未开始`;
-        } else if (completed.has(aggressorId)) {
-            title.textContent = `${aggressorId} 的押注阶段已完成`;
-        } else {
-            title.textContent = `${bettingRoundName(roundIndex)}：${aggressorId} 的押注阶段：${room.currentBet > 0 ? `跟注 ${room.currentBet} 筹码` : "等待主押"}`;
-        }
-        subProgress.appendChild(title);
-
-        const track = document.createElement("div");
-        track.className = "progress-track";
-        room.players.forEach(player => {
-            if (player.id === aggressorId) {
-                return;
-            }
-            const node = document.createElement("button");
-            node.type = "button";
-            node.className = "progress-node";
-            node.disabled = true;
-            if (player.folded) {
-                node.classList.add("folded");
-                node.textContent = `${player.id} 弃牌`;
-            } else if (roundIndex < completedRoundCount || room.finished || completed.has(aggressorId)) {
-                node.classList.add("done");
-                node.textContent = `${player.id} 已跟`;
-            } else if (roundIndex === currentRoundIndex && aggressorId === room.currentAggressorId && room.currentBet > 0 && player.roundBet === room.currentBet) {
-                node.classList.add("done");
-                node.textContent = `${player.id} 已跟`;
-            } else if (roundIndex === currentRoundIndex
-                    && aggressorId === room.currentAggressorId
-                    && (player.id === room.currentTurnId || (player.id === currentPlayerId && canPlayerCall(room, player)))) {
-                node.classList.add("active");
-                node.textContent = `${player.id} 行动`;
-            } else {
-                node.textContent = `${player.id} 等待`;
-            }
-            track.appendChild(node);
-        });
-        subProgress.appendChild(track);
     }
 
     function createTerminalNode(text, done) {

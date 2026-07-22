@@ -392,8 +392,26 @@ class PokerRoomServiceTest {
         assertEquals(10, roomService.tableSummaries().size());
         assertEquals(List.of("table-a", "table-b"), roomService.tableSummaries().get(1).playerIds());
         assertEquals(List.of("table-c"), roomService.tableSummaries().get(2).playerIds());
+        assertEquals("table-a", roomService.tableSummaries().get(1).hostId());
+        assertEquals(
+                List.of(new PokerRoomPlayer("table-a", false), new PokerRoomPlayer("table-b", false)),
+                roomService.tableSummaries().get(1).players()
+        );
         assertEquals(2, roomService.snapshot(2).players().size());
         assertEquals(1, roomService.snapshot(3).players().size());
+    }
+
+    @Test
+    void tableIdForPlayerReturnsCurrentTable() {
+        LoginService loginService = new LoginService();
+        PokerRoomService roomService = new PokerRoomService(loginService);
+        loginService.login("player-1");
+
+        assertEquals(0, roomService.tableIdForPlayer("player-1"));
+
+        roomService.join("player-1", 4);
+
+        assertEquals(4, roomService.tableIdForPlayer("player-1"));
     }
 
     @Test
