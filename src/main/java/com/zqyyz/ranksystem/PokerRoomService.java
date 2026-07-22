@@ -1,4 +1,8 @@
-package com.example.ranksystem;
+package com.zqyyz.ranksystem;
+
+import com.zqyyz.ranksystem.model.PokerRoomPlayer;
+import com.zqyyz.ranksystem.model.PokerRoomSnapshot;
+import com.zqyyz.ranksystem.model.PokerTableSummary;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -1,4 +1,4 @@
-package com.example.ranksystem;
+package com.zqyyz.ranksystem;
 
 public final class PlayerStatus {
     public static final String LOBBY = "在总大厅";

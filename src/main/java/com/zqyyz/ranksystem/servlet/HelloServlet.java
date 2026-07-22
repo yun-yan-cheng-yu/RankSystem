@@ -1,4 +1,4 @@
-package com.example.ranksystem;
+package com.zqyyz.ranksystem.servlet;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;

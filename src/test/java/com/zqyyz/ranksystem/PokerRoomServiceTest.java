@@ -1,5 +1,8 @@
-package com.example.ranksystem;
+package com.zqyyz.ranksystem;
 
+import com.zqyyz.ranksystem.model.PlayerSession;
+import com.zqyyz.ranksystem.model.PokerRoomPlayer;
+import com.zqyyz.ranksystem.model.PokerRoomSnapshot;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;

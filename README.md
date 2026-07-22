@@ -33,21 +33,29 @@ RankSystem 是一个基于 Java + Tomcat 的 Web Demo 项目。当前主要功�
 ```text
 pom.xml
 README.md
-src/main/java/com/example/ranksystem/
+src/main/java/com/zqyyz/ranksystem/
   AppState.java              # 全局内存状态和 JSON 输出
-  HelloServlet.java          # Hello world 示例接口
-  LoginServlet.java          # 登录、登出、房间和游戏 HTTP 接口
   LoginService.java          # 在线玩家状态管理
   PokerRoomService.java      # 德州扑克核心逻辑
+  PlayerStatus.java          # 玩家状态常量
+  RealtimeEndpoint.java      # WebSocket 广播
+src/main/java/com/zqyyz/ranksystem/model/
+  PlayerSession.java         # 在线玩家会话数据
   PokerRoomPlayer.java       # 房间玩家数据
   PokerRoomSnapshot.java     # 房间快照
   PokerTableSummary.java     # 桌子摘要
-  RealtimeEndpoint.java      # WebSocket 广播
+src/main/java/com/zqyyz/ranksystem/servlet/
+  AuthServlet.java           # 登录、登出、会话检查接口
+  BaseServlet.java           # Servlet 公共 JSON、鉴权和异常处理
+  HelloServlet.java          # Hello world 示例接口
+  PlayerServlet.java         # 在线玩家和玩家状态接口
+  PokerRoomServlet.java      # 德州扑克房间操作接口
+  PokerTableServlet.java     # 德州扑克桌子大厅接口
 src/main/webapp/
   index.html                 # 前端页面
   images/                    # Web 静态图片目录；当前没有运行时依赖图片
 cards_54/                    # 备用扑克牌图片素材；当前前端没有引用
-src/test/java/com/example/ranksystem/
+src/test/java/com/zqyyz/ranksystem/
   LoginServiceTest.java
   PokerRoomServiceTest.java
 ```
@@ -84,6 +92,12 @@ mvn -v
 
 ```bash
 mvn clean package
+```
+
+也可以使用项目脚本：
+
+```bash
+./scripts/build-war.sh
 ```
 
 生成的 WAR 文件：

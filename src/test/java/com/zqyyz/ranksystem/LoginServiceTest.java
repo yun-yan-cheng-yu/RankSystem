@@ -1,5 +1,6 @@
-package com.example.ranksystem;
+package com.zqyyz.ranksystem;
 
+import com.zqyyz.ranksystem.model.PlayerSession;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -57,8 +58,8 @@ class LoginServiceTest {
         String token = service.login("player-1");
 
         assertEquals(List.of("player-1"), service.expireIdlePlayers(
-                System.currentTimeMillis() + 30L * 60L * 1000L,
-                30L * 60L * 1000L,
+                System.currentTimeMillis() + AppState.IDLE_TIMEOUT_MILLIS,
+                AppState.IDLE_TIMEOUT_MILLIS,
                 playerId -> false
         ));
 
@@ -72,8 +73,8 @@ class LoginServiceTest {
         String token = service.login("player-1");
 
         assertEquals(List.of(), service.expireIdlePlayers(
-                System.currentTimeMillis() + 30L * 60L * 1000L,
-                30L * 60L * 1000L,
+                System.currentTimeMillis() + AppState.IDLE_TIMEOUT_MILLIS,
+                AppState.IDLE_TIMEOUT_MILLIS,
                 "player-1"::equals
         ));
 
@@ -82,6 +83,28 @@ class LoginServiceTest {
                 service.getOnlinePlayers()
         );
         assertTrue(service.isValidToken("player-1", token));
+    }
+
+    @Test
+    void touchKeepsPlayerActiveUntilTimeoutAfterLastHeartbeat() {
+        LoginService service = new LoginService();
+        String token = service.login("player-1");
+        long heartbeatAtMillis = 1_000L;
+        long timeoutMillis = AppState.IDLE_TIMEOUT_MILLIS;
+
+        service.touch("player-1", token, heartbeatAtMillis);
+
+        assertEquals(List.of(), service.expireIdlePlayers(
+                heartbeatAtMillis + timeoutMillis - 1,
+                timeoutMillis,
+                playerId -> false
+        ));
+
+        assertEquals(List.of("player-1"), service.expireIdlePlayers(
+                heartbeatAtMillis + timeoutMillis,
+                timeoutMillis,
+                playerId -> false
+        ));
     }
 
     @Test

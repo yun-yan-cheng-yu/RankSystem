@@ -1,7 +1,8 @@
-package com.example.ranksystem;
+package com.zqyyz.ranksystem;
+
+import com.zqyyz.ranksystem.model.PlayerSession;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,8 +55,12 @@ public class LoginService {
     }
 
     public void touch(String playerId, String token) {
+        touch(playerId, token, System.currentTimeMillis());
+    }
+
+    void touch(String playerId, String token, long nowMillis) {
         validateToken(playerId, token);
-        lastActiveAtMillis.put(normalizePlayerId(playerId), System.currentTimeMillis());
+        lastActiveAtMillis.put(normalizePlayerId(playerId), nowMillis);
     }
 
     public List<String> expireIdlePlayers(long timeoutMillis, Predicate<String> exemptPlayer) {

@@ -845,7 +845,7 @@
     const TOKEN_STORAGE_KEY = "rankSystemLoginToken";
     const VIEW_STORAGE_KEY = "rankSystemView";
     const REALTIME_RECONNECT_DELAY_MS = 1000;
-    const SESSION_CHECK_INTERVAL_MS = 30000;
+    const HEARTBEAT_INTERVAL_MS = 30000;
     const STATUS = {
         LOBBY: "在总大厅",
         GAME_A_ROOM: "在德州扑克房间"
@@ -892,15 +892,15 @@
     let currentPlayerId = "";
     let currentLoginToken = "";
     let realtimeSocket = null;
+    let realtimeReconnectEnabled = false;
     let currentPokerRoom = null;
     let currentTableId = 0;
     let currentPokerTables = [];
     let privateRoomRefreshing = false;
-    let sessionRefreshing = false;
+    let heartbeatRefreshing = false;
 
-    connectRealtime();
     restoreLogin();
-    setInterval(refreshSessionSoon, SESSION_CHECK_INTERVAL_MS);
+    setInterval(sendHeartbeatSoon, HEARTBEAT_INTERVAL_MS);
 
     loginButton.addEventListener("click", async () => {
         const playerId = playerIdInput.value.trim();
@@ -918,6 +918,7 @@
             sessionStorage.setItem(TOKEN_STORAGE_KEY, data.token);
             currentLoginToken = data.token;
             showLobby(playerId);
+            connectRealtime();
             refreshAllPlayers();
         } catch (error) {
             loginStatus.textContent = `登录失败: ${error.message}`;
@@ -1112,7 +1113,7 @@
         currentLoginToken = savedToken;
         loginStatus.textContent = "恢复登录中...";
         try {
-            await getJson(`session?id=${encodeURIComponent(savedPlayerId)}&token=${encodeURIComponent(savedToken)}`);
+            await getJson(`heartbeat?id=${encodeURIComponent(savedPlayerId)}&token=${encodeURIComponent(savedToken)}`);
             const savedView = sessionStorage.getItem(VIEW_STORAGE_KEY);
             if (savedView === "poker") {
                 showPoker(savedPlayerId);
@@ -1120,6 +1121,7 @@
             } else {
                 showLobby(savedPlayerId);
             }
+            connectRealtime();
             refreshAllPlayers();
         } catch (error) {
             clearStoredLogin();
@@ -1278,8 +1280,21 @@
     }
 
     function connectRealtime() {
+        if (!currentPlayerId || !currentLoginToken) {
+            return;
+        }
+        if (realtimeSocket && (
+                realtimeSocket.readyState === WebSocket.OPEN
+                || realtimeSocket.readyState === WebSocket.CONNECTING
+        )) {
+            return;
+        }
+
+        realtimeReconnectEnabled = true;
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        realtimeSocket = new WebSocket(`${protocol}//${window.location.host}${appBasePath()}ws`);
+        const playerId = encodeURIComponent(currentPlayerId);
+        const token = encodeURIComponent(currentLoginToken);
+        realtimeSocket = new WebSocket(`${protocol}//${window.location.host}${appBasePath()}ws?id=${playerId}&token=${token}`);
 
         realtimeSocket.addEventListener("message", (event) => {
             const message = JSON.parse(event.data);
@@ -1288,13 +1303,28 @@
             }
         });
 
-        realtimeSocket.addEventListener("close", () => {
-            setTimeout(connectRealtime, REALTIME_RECONNECT_DELAY_MS);
+        realtimeSocket.addEventListener("close", (event) => {
+            realtimeSocket = null;
+            if (event.reason === "login replaced" || event.reason === "websocket auth failed") {
+                handleSessionExpired(event.reason);
+                return;
+            }
+            if (realtimeReconnectEnabled && currentPlayerId && currentLoginToken) {
+                setTimeout(connectRealtime, REALTIME_RECONNECT_DELAY_MS);
+            }
         });
 
         realtimeSocket.addEventListener("error", () => {
             realtimeSocket.close();
         });
+    }
+
+    function disconnectRealtime() {
+        realtimeReconnectEnabled = false;
+        if (realtimeSocket) {
+            realtimeSocket.close();
+            realtimeSocket = null;
+        }
     }
 
     function applySnapshot(snapshot) {
@@ -1306,7 +1336,7 @@
                 return;
             }
             if (currentPlayerId) {
-                refreshSessionSoon();
+                sendHeartbeatSoon();
             }
         }
 
@@ -1339,6 +1369,7 @@
     }
 
     function clearStoredLogin() {
+        disconnectRealtime();
         sessionStorage.removeItem(PLAYER_ID_STORAGE_KEY);
         sessionStorage.removeItem(TOKEN_STORAGE_KEY);
         sessionStorage.removeItem(VIEW_STORAGE_KEY);
@@ -1353,20 +1384,20 @@
         showLogin(message);
     }
 
-    async function refreshSessionSoon() {
-        if (sessionRefreshing || !currentPlayerId || !currentLoginToken) {
+    async function sendHeartbeatSoon() {
+        if (heartbeatRefreshing || !currentPlayerId || !currentLoginToken) {
             return;
         }
 
-        sessionRefreshing = true;
+        heartbeatRefreshing = true;
         try {
-            await getJson(`session?id=${encodeURIComponent(currentPlayerId)}&token=${encodeURIComponent(currentLoginToken)}`);
+            await getJson(`heartbeat?id=${encodeURIComponent(currentPlayerId)}&token=${encodeURIComponent(currentLoginToken)}`);
         } catch (error) {
             if (error.status === 401) {
                 handleSessionExpired(error.message);
             }
         } finally {
-            sessionRefreshing = false;
+            heartbeatRefreshing = false;
         }
     }
 
