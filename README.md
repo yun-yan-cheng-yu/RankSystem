@@ -8,8 +8,8 @@ RankSystem 是一个基于 Java + Tomcat 的 Web Demo 项目。当前主要功�
 
 - 伪登录系统：玩家输入唯一 ID 登录，登出后回到登录界面。
 - 总大厅：登录后进入大厅，可以选择德州扑克。
-- 右侧功能区：非登录界面常驻显示，支持登出、查看当前在线玩家和状态。
-- 德州扑克房间：进入德州扑克后显示 10 张桌子，玩家主动选择桌子入座。
+- 右侧玩家状态区：非登录界面显示登出按钮、在线玩家状态和所在桌号；游戏进行中会隐藏该区域。
+- 德州扑克桌子大厅：进入德州扑克后显示 10 张桌子，桌卡展示人数、房主、游戏状态、玩家准备状态和是否正在游戏。
 - 准备机制：玩家准备后不能切换桌子，取消准备后可以重新切换。
 - 房主机制：桌面和座位上都会标识当前房主。
 - 实时广播：玩家登录、入座、准备、押注、弃牌等操作会通过 WebSocket 推送给其他在线页面。
@@ -45,10 +45,32 @@ src/main/java/com/example/ranksystem/
   RealtimeEndpoint.java      # WebSocket 广播
 src/main/webapp/
   index.html                 # 前端页面
+  images/                    # Web 静态图片目录；当前没有运行时依赖图片
+cards_54/                    # 备用扑克牌图片素材；当前前端没有引用
 src/test/java/com/example/ranksystem/
   LoginServiceTest.java
   PokerRoomServiceTest.java
 ```
+
+## 图片资源说明
+
+当前页面里的扑克牌由前端 DOM 和文字渲染，不依赖图片文件。
+
+已确认不再使用、可以删除的旧图片：
+
+```text
+A_red_peach.png
+src/main/webapp/images/A_red_peach.png
+```
+
+备用素材：
+
+```text
+cards_54/png/
+cards_54/svg/
+```
+
+这两组扑克牌素材当前没有被代码引用。如果后续要把牌面改成真实图片，建议优先使用 `cards_54/svg/`；如果继续保持文字牌面，整个 `cards_54/` 可以删除。
 
 ## 本地运行
 
@@ -175,4 +197,3 @@ ngrok 会生成一个公网地址，把这个地址后面加上 `/RankSystem/` �
 - 没有真实账号系统，玩家 ID 由前端手动输入。
 - 没有筹码余额上限校验，积分可以为负数。
 - 游戏规则仍是 Demo 版本，适合学习和演示，不适合作为正式线上游戏。
-
