@@ -102,14 +102,22 @@ public class RealtimeEndpoint {
     }
 
     public static void broadcastSnapshot() {
+        broadcastGlobalLobby();
+    }
+
+    public static void broadcastGlobalLobby() {
         String message = AppState.snapshotJson();
-        for (Session session : SESSIONS) {
-            if (session.isOpen()) {
-                session.getAsyncRemote().sendText(message);
-            } else {
-                removeSession(session);
-            }
-        }
+        sendToMatchingSessions(message, playerId -> true);
+    }
+
+    public static void broadcastPokerLobby() {
+        String message = AppState.snapshotJson();
+        sendToMatchingSessions(message, RealtimeEndpoint::isPokerPlayer);
+    }
+
+    public static void broadcastPokerTable(int tableId) {
+        String message = AppState.snapshotJson();
+        sendToMatchingSessions(message, playerId -> AppState.POKER_ROOM_SERVICE.tableIdForPlayer(playerId) == tableId);
     }
 
     private static void pingOpenSessions() {
@@ -133,6 +141,23 @@ public class RealtimeEndpoint {
                 removeSession(session);
             }
         }
+    }
+
+    private static void sendToMatchingSessions(String message, PlayerMatcher matcher) {
+        for (Session session : SESSIONS) {
+            if (!session.isOpen()) {
+                removeSession(session);
+                continue;
+            }
+            String playerId = SESSION_PLAYERS.get(session);
+            if (playerId != null && matcher.matches(playerId)) {
+                session.getAsyncRemote().sendText(message);
+            }
+        }
+    }
+
+    private static boolean isPokerPlayer(String playerId) {
+        return PlayerStatus.isGameAStatus(AppState.LOGIN_SERVICE.statusOf(playerId));
     }
 
     private static String authenticatedPlayerId(Session session) {
@@ -181,5 +206,10 @@ public class RealtimeEndpoint {
         if (playerId != null) {
             PLAYER_SESSIONS.remove(playerId, session);
         }
+    }
+
+    @FunctionalInterface
+    private interface PlayerMatcher {
+        boolean matches(String playerId);
     }
 }

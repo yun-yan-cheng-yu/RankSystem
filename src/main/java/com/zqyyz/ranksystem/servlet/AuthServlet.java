@@ -1,13 +1,7 @@
 package com.zqyyz.ranksystem.servlet;
 
 import com.zqyyz.ranksystem.AppState;
-import com.zqyyz.ranksystem.RealtimeEndpoint;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
-import java.io.IOException;
 
 @WebServlet(urlPatterns = {
         "/login",
@@ -16,44 +10,33 @@ import java.io.IOException;
 })
 public class AuthServlet extends BaseServlet {
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        expireIdlePlayers();
-        try {
-            if ("/heartbeat".equals(request.getServletPath())) {
-                validateSession(request, true);
-                writeJson(response, 200, AppState.successJson());
-                return;
-            }
-            writeJson(response, 404, AppState.errorJson("not found"));
-        } catch (IllegalArgumentException | IllegalStateException exception) {
-            handleException(response, exception);
+    protected ApiResult run(RequestContext context) {
+        if (context.isPost() && "/login".equals(context.path())) {
+            return login(context);
         }
+        if (context.isPost() && "/logout".equals(context.path())) {
+            return logout(context);
+        }
+        if (context.isPost() && "/heartbeat".equals(context.path())) {
+            return heartbeat(context);
+        }
+        return super.run(context);
     }
 
-    @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        expireIdlePlayers();
-        try {
-            switch (request.getServletPath()) {
-                case "/login" -> {
-                    String token = AppState.LOGIN_SERVICE.login(request.getParameter("id"));
-                    writeJson(response, 200, AppState.loginSuccessJson(token));
-                    RealtimeEndpoint.broadcastSnapshot();
-                }
-                case "/logout" -> {
-                    validateSession(request, false);
-                    String playerId = request.getParameter("id");
-                    AppState.POKER_ROOM_SERVICE.leaveAnyTable(playerId);
-                    AppState.LOGIN_SERVICE.logout(playerId);
-                    writeJson(response, 200, AppState.successJson());
-                    RealtimeEndpoint.broadcastSnapshot();
-                }
-                default -> writeJson(response, 404, AppState.errorJson("not found"));
-            }
-        } catch (IllegalArgumentException | IllegalStateException exception) {
-            handleException(response, exception);
-        }
+    private ApiResult login(RequestContext context) {
+        String token = AppState.LOGIN_SERVICE.login(context.playerId());
+        return ApiResult.ok(AppState.loginSuccessJson(token)).withGlobalLobbyBroadcast();
+    }
+
+    private ApiResult logout(RequestContext context) {
+        validateSession(context);
+        AppState.POKER_ROOM_SERVICE.leaveAnyTable(context.playerId());
+        AppState.LOGIN_SERVICE.logout(context.playerId());
+        return ApiResult.ok(AppState.successJson()).withGlobalLobbyBroadcast();
+    }
+
+    private ApiResult heartbeat(RequestContext context) {
+        validateHeartbeat(context);
+        return ApiResult.ok(AppState.successJson());
     }
 }

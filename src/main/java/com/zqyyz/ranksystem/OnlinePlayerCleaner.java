@@ -43,7 +43,7 @@ public final class OnlinePlayerCleaner {
 
     private static void cleanExpiredPlayers() {
         if (AppState.expireIdlePlayers()) {
-            RealtimeEndpoint.broadcastSnapshot();
+            RealtimeEndpoint.broadcastGlobalLobby();
         }
     }
 }

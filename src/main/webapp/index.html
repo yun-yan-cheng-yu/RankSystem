@@ -784,6 +784,7 @@
             <h2>桌子大厅</h2>
             <div id="tableGrid" class="table-grid"></div>
         </section>
+        <button id="backToLobbyButton" class="secondary" type="button">回到总大厅</button>
         <div id="gameArea" class="poker-layout hidden">
             <div class="control-panel">
                 <div class="room-actions">
@@ -793,7 +794,6 @@
                     <button id="leaveRoomButton" class="danger hidden" type="button">离开房间</button>
                 </div>
                 <textarea id="roomText" readonly></textarea>
-                <button id="backToLobbyButton" class="secondary" type="button">回到大厅</button>
                 <section class="action-panel">
                     <h2>行动区</h2>
                     <div id="actionStatus" class="status"></div>
@@ -848,7 +848,9 @@
     const HEARTBEAT_INTERVAL_MS = 30000;
     const STATUS = {
         LOBBY: "在总大厅",
-        GAME_A_ROOM: "在德州扑克房间"
+        GAME_A_LOBBY: "在德州扑克大厅",
+        GAME_A_ROOM: "在德州扑克桌面",
+        GAME_A_PLAYING: "在德州扑克中"
     };
 
     const loginView = document.getElementById("loginView");
@@ -932,6 +934,7 @@
         lobbyStatus.textContent = "进入德州扑克中...";
 
         try {
+            await postForm("state", withSession({id: currentPlayerId, state: STATUS.GAME_A_LOBBY}));
             showPoker();
             await refreshTables();
             refreshAllPlayers();
@@ -1113,7 +1116,7 @@
         currentLoginToken = savedToken;
         loginStatus.textContent = "恢复登录中...";
         try {
-            await getJson(`heartbeat?id=${encodeURIComponent(savedPlayerId)}&token=${encodeURIComponent(savedToken)}`);
+            await postForm("heartbeat", {id: savedPlayerId, token: savedToken});
             const savedView = sessionStorage.getItem(VIEW_STORAGE_KEY);
             if (savedView === "poker") {
                 showPoker(savedPlayerId);
@@ -1165,7 +1168,7 @@
         lobbyView.classList.add("hidden");
         pokerView.classList.remove("hidden");
         setSidebarHidden(false);
-        pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_ROOM}`;
+        pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_LOBBY}`;
         pokerStatus.textContent = "";
         currentTableId = 0;
         currentPokerRoom = null;
@@ -1224,15 +1227,15 @@
         startRoomButton.textContent = room.finished ? "下一局" : "开始游戏";
         startRoomButton.disabled = room.finished ? !canStartNextHand : !room.canStart;
         leaveRoomButton.classList.toggle("hidden", !inRoom || (room.started && !room.finished));
-        backToLobbyButton.classList.toggle("hidden", room.started && !room.finished);
+        backToLobbyButton.classList.toggle("hidden", inRoom && room.started && !room.finished);
         updateActionControls(room);
 
         if (room.started && inRoom) {
-            pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / 在德州扑克中`;
+            pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_PLAYING}`;
         } else if (inRoom) {
             pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_ROOM}`;
         } else {
-            pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / 未进入房间`;
+            pokerPlayerStatus.textContent = `当前玩家：${currentPlayerId} / ${STATUS.GAME_A_LOBBY}`;
         }
     }
 
@@ -1391,7 +1394,7 @@
 
         heartbeatRefreshing = true;
         try {
-            await getJson(`heartbeat?id=${encodeURIComponent(currentPlayerId)}&token=${encodeURIComponent(currentLoginToken)}`);
+            await postForm("heartbeat", {id: currentPlayerId, token: currentLoginToken});
         } catch (error) {
             if (error.status === 401) {
                 handleSessionExpired(error.message);

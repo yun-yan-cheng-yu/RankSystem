@@ -86,25 +86,61 @@ class LoginServiceTest {
     }
 
     @Test
-    void touchKeepsPlayerActiveUntilTimeoutAfterLastHeartbeat() {
+    void heartbeatDoesNotPreventIdleExpirationWithoutAction() {
         LoginService service = new LoginService();
         String token = service.login("player-1");
-        long heartbeatAtMillis = 1_000L;
+        long actionAtMillis = 1_000L;
+        long heartbeatAtMillis = 2_000L;
         long timeoutMillis = AppState.IDLE_TIMEOUT_MILLIS;
 
-        service.touch("player-1", token, heartbeatAtMillis);
+        service.markAction("player-1", token, actionAtMillis);
+        service.heartbeat("player-1", token, heartbeatAtMillis);
 
         assertEquals(List.of(), service.expireIdlePlayers(
-                heartbeatAtMillis + timeoutMillis - 1,
+                actionAtMillis + timeoutMillis - 1,
                 timeoutMillis,
                 playerId -> false
         ));
 
         assertEquals(List.of("player-1"), service.expireIdlePlayers(
-                heartbeatAtMillis + timeoutMillis,
+                actionAtMillis + timeoutMillis,
                 timeoutMillis,
                 playerId -> false
         ));
+    }
+
+    @Test
+    void markActionKeepsPlayerActiveUntilTimeoutAfterLastAction() {
+        LoginService service = new LoginService();
+        String token = service.login("player-1");
+        long actionAtMillis = 1_000L;
+        long timeoutMillis = AppState.IDLE_TIMEOUT_MILLIS;
+
+        service.markAction("player-1", token, actionAtMillis);
+
+        assertEquals(List.of(), service.expireIdlePlayers(
+                actionAtMillis + timeoutMillis - 1,
+                timeoutMillis,
+                playerId -> false
+        ));
+
+        assertEquals(List.of("player-1"), service.expireIdlePlayers(
+                actionAtMillis + timeoutMillis,
+                timeoutMillis,
+                playerId -> false
+        ));
+    }
+
+    @Test
+    void heartbeatAndActionTimestampsAreIndependent() {
+        LoginService service = new LoginService();
+        String token = service.login("player-1");
+
+        service.heartbeat("player-1", token, 1_000L);
+        service.markAction("player-1", token, 2_000L);
+
+        assertEquals(1_000L, service.lastHeartbeatAtMillis("player-1"));
+        assertEquals(2_000L, service.lastActionAtMillis("player-1"));
     }
 
     @Test
@@ -132,20 +168,23 @@ class LoginServiceTest {
     }
 
     @Test
-    void gameAPlayersIncludeRoomAndPlayingStatuses() {
+    void gameAPlayersIncludeLobbyRoomAndPlayingStatuses() {
         LoginService service = new LoginService();
 
         service.login("player-1");
         service.login("player-2");
         service.login("player-3");
-        service.updateStatus("player-1", PlayerStatus.GAME_A_ROOM);
-        service.updateStatus("player-2", PlayerStatus.GAME_A_PLAYING);
-        service.updateStatus("player-3", PlayerStatus.GAME_B_ROOM);
+        service.login("player-4");
+        service.updateStatus("player-1", PlayerStatus.GAME_A_LOBBY);
+        service.updateStatus("player-2", PlayerStatus.GAME_A_ROOM);
+        service.updateStatus("player-3", PlayerStatus.GAME_A_PLAYING);
+        service.updateStatus("player-4", PlayerStatus.GAME_B_ROOM);
 
         assertEquals(
                 List.of(
-                        new PlayerSession("player-1", PlayerStatus.GAME_A_ROOM),
-                        new PlayerSession("player-2", PlayerStatus.GAME_A_PLAYING)
+                        new PlayerSession("player-1", PlayerStatus.GAME_A_LOBBY),
+                        new PlayerSession("player-2", PlayerStatus.GAME_A_ROOM),
+                        new PlayerSession("player-3", PlayerStatus.GAME_A_PLAYING)
                 ),
                 service.getPlayersByGame("A")
         );

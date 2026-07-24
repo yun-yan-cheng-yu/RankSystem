@@ -12,7 +12,8 @@ import java.util.function.Predicate;
 public class LoginService {
     private final Map<String, PlayerSession> onlinePlayers = new ConcurrentHashMap<>();
     private final Map<String, String> loginTokens = new ConcurrentHashMap<>();
-    private final Map<String, Long> lastActiveAtMillis = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastHeartbeatAtMillis = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastActionAtMillis = new ConcurrentHashMap<>();
 
     public String login(String playerId) {
         String normalizedPlayerId = normalizePlayerId(playerId);
@@ -23,7 +24,9 @@ public class LoginService {
         String token = UUID.randomUUID().toString();
         onlinePlayers.put(normalizedPlayerId, new PlayerSession(normalizedPlayerId, status));
         loginTokens.put(normalizedPlayerId, token);
-        lastActiveAtMillis.put(normalizedPlayerId, System.currentTimeMillis());
+        long nowMillis = System.currentTimeMillis();
+        lastHeartbeatAtMillis.put(normalizedPlayerId, nowMillis);
+        lastActionAtMillis.put(normalizedPlayerId, nowMillis);
         return token;
     }
 
@@ -31,7 +34,8 @@ public class LoginService {
         String normalizedPlayerId = normalizePlayerId(playerId);
         onlinePlayers.remove(normalizedPlayerId);
         loginTokens.remove(normalizedPlayerId);
-        lastActiveAtMillis.remove(normalizedPlayerId);
+        lastHeartbeatAtMillis.remove(normalizedPlayerId);
+        lastActionAtMillis.remove(normalizedPlayerId);
     }
 
     public void validateToken(String playerId, String token) {
@@ -54,13 +58,31 @@ public class LoginService {
         }
     }
 
-    public void touch(String playerId, String token) {
-        touch(playerId, token, System.currentTimeMillis());
+    public void heartbeat(String playerId, String token) {
+        heartbeat(playerId, token, System.currentTimeMillis());
     }
 
-    void touch(String playerId, String token, long nowMillis) {
+    void heartbeat(String playerId, String token, long nowMillis) {
         validateToken(playerId, token);
-        lastActiveAtMillis.put(normalizePlayerId(playerId), nowMillis);
+        lastHeartbeatAtMillis.put(normalizePlayerId(playerId), nowMillis);
+    }
+
+    public void markAction(String playerId, String token) {
+        markAction(playerId, token, System.currentTimeMillis());
+    }
+
+    void markAction(String playerId, String token, long nowMillis) {
+        validateToken(playerId, token);
+        String normalizedPlayerId = normalizePlayerId(playerId);
+        lastActionAtMillis.put(normalizedPlayerId, nowMillis);
+    }
+
+    Long lastHeartbeatAtMillis(String playerId) {
+        return lastHeartbeatAtMillis.get(normalizePlayerId(playerId));
+    }
+
+    Long lastActionAtMillis(String playerId) {
+        return lastActionAtMillis.get(normalizePlayerId(playerId));
     }
 
     public List<String> expireIdlePlayers(long timeoutMillis, Predicate<String> exemptPlayer) {
@@ -73,8 +95,8 @@ public class LoginService {
             if (exemptPlayer.test(playerId)) {
                 continue;
             }
-            long lastActiveAt = lastActiveAtMillis.getOrDefault(playerId, nowMillis);
-            if (nowMillis - lastActiveAt >= timeoutMillis) {
+            long lastActionAt = lastActionAtMillis.getOrDefault(playerId, nowMillis);
+            if (nowMillis - lastActionAt >= timeoutMillis) {
                 logout(playerId);
                 expiredPlayerIds.add(playerId);
             }
@@ -95,6 +117,11 @@ public class LoginService {
         List<PlayerSession> players = new ArrayList<>(onlinePlayers.values());
         players.sort((left, right) -> left.playerId().compareTo(right.playerId()));
         return players;
+    }
+
+    public String statusOf(String playerId) {
+        PlayerSession session = onlinePlayers.get(normalizePlayerId(playerId));
+        return session == null ? "" : session.status();
     }
 
     public List<PlayerSession> getPlayersByGame(String game) {

@@ -459,6 +459,7 @@ class PokerRoomServiceTest {
         roomService.leave("player-1");
 
         assertEquals("player-2", roomService.snapshot().hostId());
+        assertEquals(PlayerStatus.GAME_A_LOBBY, loginService.getOnlinePlayers().get(0).status());
     }
 
     @Test

@@ -180,7 +180,7 @@ public class PokerRoomService {
             throw new IllegalStateException("cannot leave after game started");
         }
         targetTable.players.remove(normalizedPlayerId);
-        loginService.updateStatus(normalizedPlayerId, PlayerStatus.GAME_A_ROOM);
+        loginService.updateStatus(normalizedPlayerId, PlayerStatus.GAME_A_LOBBY);
         if (targetTable.players.isEmpty()) {
             resetGame(targetTable);
         } else if (normalizedPlayerId.equals(targetTable.dealerId) || normalizedPlayerId.equals(targetTable.currentTurnId)) {
