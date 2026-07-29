@@ -1,5 +1,8 @@
 package com.zqyyz.ranksystem;
 
+import com.zqyyz.ranksystem.model.HandCategory;
+import com.zqyyz.ranksystem.model.HandValue;
+import com.zqyyz.ranksystem.model.PlayingCard;
 import com.zqyyz.ranksystem.model.PokerRoomPlayer;
 import com.zqyyz.ranksystem.model.PokerRoomSnapshot;
 import com.zqyyz.ranksystem.model.PokerTableSummary;
@@ -354,15 +357,9 @@ public class PokerRoomService {
     }
 
     private List<String> newDeck() {
-        List<String> newDeck = new ArrayList<>();
-        List<String> suits = List.of("♠", "♥", "♦", "♣");
-        List<String> ranks = List.of("A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K");
-        for (String suit : suits) {
-            for (String rank : ranks) {
-                newDeck.add(rank + suit);
-            }
-        }
-        return newDeck;
+        return PlayingCard.fullDeck().stream()
+                .map(PlayingCard::toString)
+                .toList();
     }
 
     private String draw(List<String> targetDeck) {
@@ -519,6 +516,7 @@ public class PokerRoomService {
     private void finishByShowdown(TableState targetTable) {
         String bestPlayerId = "";
         HandValue bestHand = null;
+        // 最终比牌只比较没有弃牌的玩家。
         for (PokerRoomPlayer player : activePlayers(targetTable)) {
             HandValue hand = evaluateBestHand(player.holeCards(), targetTable.communityCards);
             if (bestHand == null || hand.compareTo(bestHand) > 0) {
@@ -546,22 +544,34 @@ public class PokerRoomService {
         List<String> cards = new ArrayList<>();
         cards.addAll(holeCards);
         cards.addAll(communityCards);
+        return bestHandFromCards(cards);
+    }
+
+    static HandValue bestHandFromCards(List<String> cards) {
         if (cards.size() < 5) {
             throw new IllegalArgumentException("at least five cards are required");
         }
+        if (cards.size() > 7) {
+            throw new IllegalArgumentException("at most seven cards are supported");
+        }
 
+        List<PlayingCard> parsedCards = cards.stream()
+                .map(PlayingCard::parse)
+                .toList();
+
+        // 德州扑克从传入牌中选出最大的 5 张牌型。
         HandValue bestHand = null;
-        for (int first = 0; first < cards.size() - 4; first++) {
-            for (int second = first + 1; second < cards.size() - 3; second++) {
-                for (int third = second + 1; third < cards.size() - 2; third++) {
-                    for (int fourth = third + 1; fourth < cards.size() - 1; fourth++) {
-                        for (int fifth = fourth + 1; fifth < cards.size(); fifth++) {
+        for (int first = 0; first < parsedCards.size() - 4; first++) {
+            for (int second = first + 1; second < parsedCards.size() - 3; second++) {
+                for (int third = second + 1; third < parsedCards.size() - 2; third++) {
+                    for (int fourth = third + 1; fourth < parsedCards.size() - 1; fourth++) {
+                        for (int fifth = fourth + 1; fifth < parsedCards.size(); fifth++) {
                             HandValue hand = evaluateFiveCards(List.of(
-                                    cards.get(first),
-                                    cards.get(second),
-                                    cards.get(third),
-                                    cards.get(fourth),
-                                    cards.get(fifth)
+                                    parsedCards.get(first),
+                                    parsedCards.get(second),
+                                    parsedCards.get(third),
+                                    parsedCards.get(fourth),
+                                    parsedCards.get(fifth)
                             ));
                             if (bestHand == null || hand.compareTo(bestHand) > 0) {
                                 bestHand = hand;
@@ -574,49 +584,55 @@ public class PokerRoomService {
         return bestHand;
     }
 
-    private static HandValue evaluateFiveCards(List<String> cards) {
+    private static HandValue evaluateFiveCards(List<PlayingCard> cards) {
         Map<Integer, Integer> rankCounts = new LinkedHashMap<>();
         List<Integer> ranks = new ArrayList<>();
-        List<String> suits = new ArrayList<>();
-        for (String card : cards) {
-            int rank = rankScore(card);
+        List<String> cardTexts = cards.stream()
+                .map(PlayingCard::toString)
+                .toList();
+        for (PlayingCard card : cards) {
+            int rank = card.rank().value();
             ranks.add(rank);
-            suits.add(card.substring(card.length() - 1));
             rankCounts.put(rank, rankCounts.getOrDefault(rank, 0) + 1);
         }
 
         ranks.sort(Collections.reverseOrder());
-        boolean flush = suits.stream().distinct().count() == 1;
+        boolean flush = cards.stream()
+                .map(PlayingCard::suit)
+                .distinct()
+                .count() == 1;
         int straightHigh = straightHigh(ranks);
+        // category 按牌型强度排序；tieBreakers 用于同牌型时继续比大小。
         if (flush && straightHigh > 0) {
-            return new HandValue(8, List.of(straightHigh), straightHigh == 14 ? "皇家同花顺" : "同花顺", cards);
+            HandCategory category = straightHigh == 14 ? HandCategory.ROYAL_FLUSH : HandCategory.STRAIGHT_FLUSH;
+            return new HandValue(category, List.of(straightHigh), cardTexts);
         }
 
         List<Integer> fourRanks = ranksByCount(rankCounts, 4);
         if (!fourRanks.isEmpty()) {
-            return new HandValue(7, List.of(fourRanks.get(0), highestRankWithCount(rankCounts, 1)), "四条", cards);
+            return new HandValue(HandCategory.FOUR_OF_KIND, List.of(fourRanks.get(0), highestRankWithCount(rankCounts, 1)), cardTexts);
         }
 
         List<Integer> threeRanks = ranksByCount(rankCounts, 3);
         List<Integer> pairRanks = ranksByCount(rankCounts, 2);
         if (!threeRanks.isEmpty() && (!pairRanks.isEmpty() || threeRanks.size() > 1)) {
             int pairRank = !pairRanks.isEmpty() ? pairRanks.get(0) : threeRanks.get(1);
-            return new HandValue(6, List.of(threeRanks.get(0), pairRank), "葫芦", cards);
+            return new HandValue(HandCategory.FULL_HOUSE, List.of(threeRanks.get(0), pairRank), cardTexts);
         }
 
         if (flush) {
-            return new HandValue(5, ranks, "同花", cards);
+            return new HandValue(HandCategory.FLUSH, ranks, cardTexts);
         }
 
         if (straightHigh > 0) {
-            return new HandValue(4, List.of(straightHigh), "顺子", cards);
+            return new HandValue(HandCategory.STRAIGHT, List.of(straightHigh), cardTexts);
         }
 
         if (!threeRanks.isEmpty()) {
             List<Integer> tieBreakers = new ArrayList<>();
             tieBreakers.add(threeRanks.get(0));
             tieBreakers.addAll(highestRanksExcluding(rankCounts, List.of(threeRanks.get(0)), 2));
-            return new HandValue(3, tieBreakers, "三条", cards);
+            return new HandValue(HandCategory.THREE_OF_KIND, tieBreakers, cardTexts);
         }
 
         if (pairRanks.size() >= 2) {
@@ -624,17 +640,17 @@ public class PokerRoomService {
             tieBreakers.add(pairRanks.get(0));
             tieBreakers.add(pairRanks.get(1));
             tieBreakers.addAll(highestRanksExcluding(rankCounts, List.of(pairRanks.get(0), pairRanks.get(1)), 1));
-            return new HandValue(2, tieBreakers, "两对", cards);
+            return new HandValue(HandCategory.TWO_PAIR, tieBreakers, cardTexts);
         }
 
         if (pairRanks.size() == 1) {
             List<Integer> tieBreakers = new ArrayList<>();
             tieBreakers.add(pairRanks.get(0));
             tieBreakers.addAll(highestRanksExcluding(rankCounts, List.of(pairRanks.get(0)), 3));
-            return new HandValue(1, tieBreakers, "一对", cards);
+            return new HandValue(HandCategory.ONE_PAIR, tieBreakers, cardTexts);
         }
 
-        return new HandValue(0, ranks, "高牌", cards);
+        return new HandValue(HandCategory.HIGH_CARD, ranks, cardTexts);
     }
 
     private static List<Integer> ranksByCount(Map<Integer, Integer> rankCounts, int count) {
@@ -660,6 +676,7 @@ public class PokerRoomService {
     private static int straightHigh(List<Integer> ranks) {
         List<Integer> uniqueRanks = new ArrayList<>(ranks.stream().distinct().toList());
         if (uniqueRanks.contains(14)) {
+            // A 可以作为 A-K-Q-J-10 的最大牌，也可以作为 A-2-3-4-5 的最小牌。
             uniqueRanks.add(1);
         }
         for (int high = 14; high >= 5; high--) {
@@ -676,35 +693,6 @@ public class PokerRoomService {
             }
         }
         return 0;
-    }
-
-    private static int rankScore(String card) {
-        String rank = card.substring(0, card.length() - 1);
-        return switch (rank) {
-            case "A" -> 14;
-            case "K" -> 13;
-            case "Q" -> 12;
-            case "J" -> 11;
-            default -> Integer.parseInt(rank);
-        };
-    }
-
-    private record HandValue(int category, List<Integer> tieBreakers, String name, List<String> cards) implements Comparable<HandValue> {
-        @Override
-        public int compareTo(HandValue other) {
-            int categoryCompare = Integer.compare(category, other.category);
-            if (categoryCompare != 0) {
-                return categoryCompare;
-            }
-            int size = Math.min(tieBreakers.size(), other.tieBreakers.size());
-            for (int index = 0; index < size; index++) {
-                int tieBreakerCompare = Integer.compare(tieBreakers.get(index), other.tieBreakers.get(index));
-                if (tieBreakerCompare != 0) {
-                    return tieBreakerCompare;
-                }
-            }
-            return Integer.compare(tieBreakers.size(), other.tieBreakers.size());
-        }
     }
 
     private void finish(TableState targetTable, String winnerId, String message) {

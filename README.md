@@ -10,12 +10,16 @@ RankSystem 是一个基于 Java + Tomcat 的 Web Demo 项目。当前主要功�
 - 总大厅：登录后进入大厅，可以选择德州扑克。
 - 右侧玩家状态区：非登录界面显示登出按钮、在线玩家状态和所在桌号；游戏进行中会隐藏该区域。
 - 德州扑克桌子大厅：进入德州扑克后显示 10 张桌子，桌卡展示人数、房主、游戏状态、玩家准备状态和是否正在游戏。
+- 玩家状态层级：当前区分在总大厅、在德州扑克大厅、在德州扑克桌面、在德州扑克中。
 - 准备机制：玩家准备后不能切换桌子，取消准备后可以重新切换。
 - 房主机制：桌面和座位上都会标识当前房主。
-- 实时广播：玩家登录、入座、准备、押注、弃牌等操作会通过 WebSocket 推送给其他在线页面。
+- 实时广播：玩家登录、入座、准备、押注、弃牌等操作会通过 WebSocket 推送给相关在线页面。
+- 分层广播：支持全大厅广播、德州扑克大厅广播、桌面内广播。
+- 心跳机制：前端定时 POST `/heartbeat`，WebSocket 连接使用服务端 ping 和客户端 pong 检测断线。
 - 游戏流程：押底、发牌、押注、跟注、弃牌、公共牌推进、最终比牌。
 - 积分系统：押底和押注会扣积分，赢家获得底池。
 - 摊牌展示：最后比牌阶段展示每位玩家的底牌、最终牌型和组成牌型的 5 张成牌。
+- 牌型模型：内部使用 `PlayingCard`、`CardRank`、`CardSuit` 表达扑克牌，使用 `HandCategory` 表示牌型强度和展示名，`HandValue` 统一比较牌型和关键点数。
 
 ## 技术栈
 
@@ -33,24 +37,42 @@ RankSystem 是一个基于 Java + Tomcat 的 Web Demo 项目。当前主要功�
 ```text
 pom.xml
 README.md
+scripts/
+  build-war.sh              # Maven 打 WAR 的辅助脚本
 src/main/java/com/zqyyz/ranksystem/
+  AGENTS.md                 # 主业务包 AI 导读
   AppState.java              # 全局内存状态和 JSON 输出
   LoginService.java          # 在线玩家状态管理
+  OnlinePlayerCleaner.java   # 空闲玩家后台清理
   PokerRoomService.java      # 德州扑克核心逻辑
   PlayerStatus.java          # 玩家状态常量
-  RealtimeEndpoint.java      # WebSocket 广播
+  RealtimeEndpoint.java      # /ws WebSocket 连接、心跳和广播
 src/main/java/com/zqyyz/ranksystem/model/
+  AGENTS.md                 # 模型包 AI 导读
+  CardRank.java              # 扑克牌点数枚举
+  CardSuit.java              # 扑克牌花色枚举
+  HandCategory.java          # 德州扑克牌型枚举
+  HandValue.java             # 一手牌的评估结果和比较逻辑
   PlayerSession.java         # 在线玩家会话数据
+  PlayingCard.java           # 后端内部扑克牌模型
   PokerRoomPlayer.java       # 房间玩家数据
   PokerRoomSnapshot.java     # 房间快照
   PokerTableSummary.java     # 桌子摘要
 src/main/java/com/zqyyz/ranksystem/servlet/
+  AGENTS.md                 # Servlet 包 AI 导读
+  ApiResult.java             # HTTP 响应和广播目标
   AuthServlet.java           # 登录、登出、会话检查接口
   BaseServlet.java           # Servlet 公共 JSON、鉴权和异常处理
+  BroadcastScope.java        # 广播范围枚举
+  BroadcastTarget.java       # 广播目标
   HelloServlet.java          # Hello world 示例接口
   PlayerServlet.java         # 在线玩家和玩家状态接口
   PokerRoomServlet.java      # 德州扑克房间操作接口
   PokerTableServlet.java     # 德州扑克桌子大厅接口
+  RequestContext.java        # 请求上下文和参数解析
+src/main/java/com/zqyyz/ranksystem/util/
+  AGENTS.md                 # 工具包 AI 导读
+  CollectionUtil.java        # 集合字典序比较工具
 src/main/webapp/
   index.html                 # 前端页面
   images/                    # Web 静态图片目录；当前没有运行时依赖图片
@@ -138,6 +160,9 @@ GET /RankSystem/
 ```text
 POST /RankSystem/login
 POST /RankSystem/logout
+POST /RankSystem/heartbeat
+GET  /RankSystem/players
+POST /RankSystem/state
 GET  /RankSystem/poker-tables
 GET  /RankSystem/poker-room
 POST /RankSystem/poker-room/join
@@ -153,8 +178,44 @@ POST /RankSystem/poker-room/bet
 WebSocket：
 
 ```text
-ws://localhost:8081/RankSystem/realtime
+ws://localhost:8081/RankSystem/ws?id=玩家ID&token=登录token
 ```
+
+如果通过 HTTPS 访问，WebSocket 地址应使用 `wss://`。
+
+## 实时同步和心跳
+
+本项目有两套连接状态机制：
+
+- HTTP 心跳：前端每 30 秒 POST `/heartbeat`，只刷新 `lastHeartbeatAtMillis`，不算业务活跃操作。
+- WebSocket 心跳：服务端每 30 秒发送 ping，连续 3 次未收到 pong 会关闭连接。
+
+空闲清理基于 `lastActionAtMillis` 判断，玩家进入桌面后不会被空闲清理踢出。业务操作会刷新 `lastActionAtMillis`，单纯心跳不会刷新业务活跃时间。
+
+广播范围是包含关系：
+
+```text
+全大厅广播 > 德州扑克大厅广播 > 某张桌面广播
+```
+
+当前语义：
+
+- 全大厅广播：所有在线玩家。
+- 德州扑克大厅广播：所有德州扑克模块内玩家，包括德州扑克大厅、桌面和游戏中。
+- 桌面内广播：指定桌子的玩家。
+
+## 牌型比较
+
+德州扑克牌型计算在 `PokerRoomService` 中完成：
+
+```text
+2 张底牌 + 公共牌
+  -> 枚举所有 5 张组合
+  -> evaluateFiveCards 判断每组牌型
+  -> HandValue.compareTo 选出最大牌型
+```
+
+房间状态和 JSON 当前仍使用 `"A♠"`、`"10♦"` 这种字符串，牌型计算内部会先解析成 `PlayingCard`。牌型强度由 `HandCategory.strength()` 显式定义，不依赖 `enum.ordinal()`。同牌型大小通过 `HandValue.tieBreakers` 按字典序比较，比较细节复用 `CollectionUtil.compareLexicographically(...)`。
 
 ## 测试
 
@@ -175,6 +236,19 @@ mvn test
 - 正式德州扑克牌型比较
 - 摊牌时底牌、牌型和成牌展示数据
 - 积分扣除和底池结算
+
+## AI 导读文件
+
+项目在关键 Java 包下放了 `AGENTS.md`，用于帮助 AI 或后续维护者快速理解目录职责：
+
+```text
+src/main/java/com/zqyyz/ranksystem/AGENTS.md
+src/main/java/com/zqyyz/ranksystem/model/AGENTS.md
+src/main/java/com/zqyyz/ranksystem/servlet/AGENTS.md
+src/main/java/com/zqyyz/ranksystem/util/AGENTS.md
+```
+
+修改对应包代码前，可以先阅读同目录下的 `AGENTS.md`。
 
 ## 分享给别人访问
 

@@ -1,6 +1,7 @@
 package com.zqyyz.ranksystem;
 
 import com.zqyyz.ranksystem.model.PlayerSession;
+import com.zqyyz.ranksystem.model.PlayingCard;
 import com.zqyyz.ranksystem.model.PokerRoomPlayer;
 import com.zqyyz.ranksystem.model.PokerRoomSnapshot;
 import org.junit.jupiter.api.Test;
@@ -320,6 +321,23 @@ class PokerRoomServiceTest {
                 List.of("A♠", "K♠", "Q♠", "J♠", "10♠"),
                 PokerRoomService.bestHandCards(List.of("A♠", "K♠"), List.of("Q♠", "J♠", "10♠", "2♦", "3♣"))
         );
+    }
+
+    @Test
+    void bestHandFromCardsAcceptsSevenCardsDirectly() {
+        var bestHand = PokerRoomService.bestHandFromCards(List.of("A♠", "K♠", "Q♠", "J♠", "10♠", "2♦", "3♣"));
+
+        assertEquals("皇家同花顺", bestHand.name());
+        assertEquals(List.of("A♠", "K♠", "Q♠", "J♠", "10♠"), bestHand.cards());
+    }
+
+    @Test
+    void playingCardParsesRankAndSuitWithoutChangingDisplayText() {
+        PlayingCard card = PlayingCard.parse("10♠");
+
+        assertEquals(10, card.rank().value());
+        assertEquals("♠", card.suit().symbol());
+        assertEquals("10♠", card.toString());
     }
 
     @Test
