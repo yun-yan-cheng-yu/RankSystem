@@ -1,8 +1,8 @@
 # RankSystem
 
-RankSystem 是一个基于 Java + Tomcat 的 Web Demo 项目。当前主要功能是一个内存版德州扑克房间系统，用来演示登录、房间、桌子、实时广播、押注、摊牌和积分结算流程。
+RankSystem 是一个基于 Java + Spring Boot 的 Web Demo 项目。当前主要功能是一个内存版德州扑克房间系统，用来演示登录、房间、桌子、实时广播、押注、摊牌和积分结算流程。
 
-数据暂时全部保存在内存中，没有接入数据库。Tomcat 重启后，在线玩家、房间状态、牌局状态和积分都会重置。
+数据暂时全部保存在内存中，没有接入数据库。应用重启后，在线玩家、房间状态、牌局状态和积分都会重置。
 
 ## 当前功能
 
@@ -25,28 +25,38 @@ RankSystem 是一个基于 Java + Tomcat 的 Web Demo 项目。当前主要功�
 
 - Java 17
 - Maven
-- Tomcat 10+
-- Jakarta Servlet 6
-- Jakarta WebSocket
+- Spring Boot 3.2.5
+- Spring MVC（REST 接口）
+- Jakarta WebSocket（JSR-356）+ ServerEndpointExporter
+- Jackson JSON
 - JUnit 5
 
-注意：本项目使用 `jakarta.servlet`，需要 Tomcat 10 或更新版本。Tomcat 9 使用的是 `javax.servlet`，不能直接运行当前版本。
+迁移过程与前后对比见 [SPRING_BOOT_MIGRATION.md](SPRING_BOOT_MIGRATION.md)。
 
 ## 项目结构
 
 ```text
 pom.xml
 README.md
-scripts/
-  build-war.sh              # Maven 打 WAR 的辅助脚本
+SPRING_BOOT_MIGRATION.md      # Spring Boot 迁移说明
 src/main/java/com/zqyyz/ranksystem/
   AGENTS.md                 # 主业务包 AI 导读
-  AppState.java              # 全局内存状态和 JSON 输出
-  LoginService.java          # 在线玩家状态管理
-  OnlinePlayerCleaner.java   # 空闲玩家后台清理
-  PokerRoomService.java      # 德州扑克核心逻辑
+  RankSystemApplication.java # Spring Boot 启动类
+  AppInitializer.java        # 启动初始化（WebSocket 心跳）
+  AppState.java              # 全局内存状态和 JSON 输出（Spring Bean）
+  LoginService.java          # 在线玩家状态管理（Service）
+  PokerRoomService.java      # 德州扑克核心逻辑（Service）
+  OnlinePlayerCleaner.java   # 空闲玩家定时清理（@Scheduled）
   PlayerStatus.java          # 玩家状态常量
   RealtimeEndpoint.java      # /ws WebSocket 连接、心跳和广播
+  SpringContextHolder.java   # Spring 上下文持有器
+  GlobalExceptionHandler.java# 全局异常处理
+  WebConfig.java             # Web 配置（WebSocket 端点注册）
+  controller/
+    AuthController.java      # /login、/logout、/heartbeat
+    PlayerController.java    # /players、/state
+    PokerRoomController.java # /poker-room 系列接口
+    PokerTableController.java# /poker-tables
 src/main/java/com/zqyyz/ranksystem/model/
   AGENTS.md                 # 模型包 AI 导读
   CardRank.java              # 扑克牌点数枚举
@@ -58,24 +68,12 @@ src/main/java/com/zqyyz/ranksystem/model/
   PokerRoomPlayer.java       # 房间玩家数据
   PokerRoomSnapshot.java     # 房间快照
   PokerTableSummary.java     # 桌子摘要
-src/main/java/com/zqyyz/ranksystem/servlet/
-  AGENTS.md                 # Servlet 包 AI 导读
-  ApiResult.java             # HTTP 响应和广播目标
-  AuthServlet.java           # 登录、登出、会话检查接口
-  BaseServlet.java           # Servlet 公共 JSON、鉴权和异常处理
-  BroadcastScope.java        # 广播范围枚举
-  BroadcastTarget.java       # 广播目标
-  HelloServlet.java          # Hello world 示例接口
-  PlayerServlet.java         # 在线玩家和玩家状态接口
-  PokerRoomServlet.java      # 德州扑克房间操作接口
-  PokerTableServlet.java     # 德州扑克桌子大厅接口
-  RequestContext.java        # 请求上下文和参数解析
 src/main/java/com/zqyyz/ranksystem/util/
   AGENTS.md                 # 工具包 AI 导读
   CollectionUtil.java        # 集合字典序比较工具
-src/main/webapp/
-  index.html                 # 前端页面
-  images/                    # Web 静态图片目录；当前没有运行时依赖图片
+src/main/resources/
+  application.properties     # 端口、静态资源配置
+  static/index.html          # 前端页面
 cards_54/                    # 备用扑克牌图片素材；当前前端没有引用
 src/test/java/com/zqyyz/ranksystem/
   LoginServiceTest.java
@@ -104,47 +102,23 @@ cards_54/svg/
 
 ## 本地运行
 
-先确认本机有 Maven：
+开发模式运行：
 
 ```bash
-mvn -v
+mvn spring-boot:run
 ```
 
-打包：
+打包并运行可执行 JAR：
 
 ```bash
 mvn clean package
-```
-
-也可以使用项目脚本：
-
-```bash
-./scripts/build-war.sh
-```
-
-生成的 WAR 文件：
-
-```text
-target/RankSystem.war
-```
-
-如果 Tomcat 是通过 Homebrew 安装的，可以直接部署并重启：
-
-```bash
-cp target/RankSystem.war /opt/homebrew/opt/tomcat/libexec/webapps/RankSystem.war
-brew services restart tomcat
+java -jar target/ranksystem.jar
 ```
 
 访问地址：
 
 ```text
-http://localhost:8081/RankSystem/
-```
-
-如果你的 Tomcat 使用默认端口，地址可能是：
-
-```text
-http://localhost:8080/RankSystem/
+http://localhost:8081/
 ```
 
 ## 常用接口
@@ -152,33 +126,33 @@ http://localhost:8080/RankSystem/
 主要页面直接访问：
 
 ```text
-GET /RankSystem/
+GET /
 ```
 
 常用 HTTP 接口：
 
 ```text
-POST /RankSystem/login
-POST /RankSystem/logout
-POST /RankSystem/heartbeat
-GET  /RankSystem/players
-POST /RankSystem/state
-GET  /RankSystem/poker-tables
-GET  /RankSystem/poker-room
-POST /RankSystem/poker-room/join
-POST /RankSystem/poker-room/ready
-POST /RankSystem/poker-room/unready
-POST /RankSystem/poker-room/start
-POST /RankSystem/poker-room/next
-POST /RankSystem/poker-room/leave
-POST /RankSystem/poker-room/fold
-POST /RankSystem/poker-room/bet
+POST /login
+POST /logout
+POST /heartbeat
+GET  /players
+POST /state
+GET  /poker-tables
+GET  /poker-room
+POST /poker-room/join
+POST /poker-room/ready
+POST /poker-room/unready
+POST /poker-room/start
+POST /poker-room/next
+POST /poker-room/leave
+POST /poker-room/fold
+POST /poker-room/bet
 ```
 
 WebSocket：
 
 ```text
-ws://localhost:8081/RankSystem/ws?id=玩家ID&token=登录token
+ws://localhost:8081/ws?id=玩家ID&token=登录token
 ```
 
 如果通过 HTTPS 访问，WebSocket 地址应使用 `wss://`。

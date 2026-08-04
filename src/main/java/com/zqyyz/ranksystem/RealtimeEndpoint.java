@@ -8,12 +8,15 @@ import jakarta.websocket.OnOpen;
 import jakarta.websocket.PongMessage;
 import jakarta.websocket.Session;
 import jakarta.websocket.server.ServerEndpoint;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -21,17 +24,31 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * JSR-356 WebSocket endpoint for realtime broadcasts.
+ *
+ * <p>The Jakarta WebSocket container instantiates this class once per connection,
+ * so all shared state (open sessions, heartbeat task) is kept in static fields.
+ * REST controllers and the scheduled idle cleaner trigger pushes through the
+ * static broadcast methods below.
+ */
+@Component
 @ServerEndpoint("/ws")
 public class RealtimeEndpoint {
+
+    private static final Logger log = LoggerFactory.getLogger(RealtimeEndpoint.class);
     private static final long PING_INTERVAL_SECONDS = 30L;
     private static final int MAX_MISSED_PONGS = 3;
     private static final ByteBuffer PING_PAYLOAD = ByteBuffer.wrap("ping".getBytes(StandardCharsets.UTF_8));
+
     private static final Set<Session> SESSIONS = ConcurrentHashMap.newKeySet();
     private static final Map<Session, Integer> MISSED_PONGS = new ConcurrentHashMap<>();
     private static final Map<Session, String> SESSION_PLAYERS = new ConcurrentHashMap<>();
     private static final Map<String, Session> PLAYER_SESSIONS = new ConcurrentHashMap<>();
     private static ScheduledExecutorService heartbeatExecutor;
     private static ScheduledFuture<?> heartbeatTask;
+
+    // ---- Heartbeat lifecycle ------------------------------------------------
 
     public static synchronized void startHeartbeat() {
         if (heartbeatTask != null && !heartbeatTask.isCancelled()) {
@@ -65,6 +82,8 @@ public class RealtimeEndpoint {
         }
     }
 
+    // ---- WebSocket handlers -------------------------------------------------
+
     @OnOpen
     public void onOpen(Session session) {
         startHeartbeat();
@@ -83,7 +102,12 @@ public class RealtimeEndpoint {
         SESSIONS.add(session);
         MISSED_PONGS.put(session, 0);
         SESSION_PLAYERS.put(session, playerId);
-        session.getAsyncRemote().sendText(AppState.snapshotJson());
+
+        try {
+            session.getAsyncRemote().sendText(AppState.instance().snapshotJson());
+        } catch (RuntimeException e) {
+            log.warn("Failed to send initial snapshot to {}", session.getId(), e);
+        }
     }
 
     @OnMessage
@@ -98,27 +122,31 @@ public class RealtimeEndpoint {
 
     @OnError
     public void onError(Session session, Throwable error) {
+        log.error("WebSocket error for session {}", session.getId(), error);
         removeSession(session);
     }
 
-    public static void broadcastSnapshot() {
-        broadcastGlobalLobby();
-    }
+    // ---- Broadcasts (called by REST controllers and scheduled cleaner) -------
 
     public static void broadcastGlobalLobby() {
-        String message = AppState.snapshotJson();
-        sendToMatchingSessions(message, playerId -> true);
+        broadcastToMatching(AppState.instance().snapshotJson(), playerId -> true);
     }
 
     public static void broadcastPokerLobby() {
-        String message = AppState.snapshotJson();
-        sendToMatchingSessions(message, RealtimeEndpoint::isPokerPlayer);
+        broadcastToMatching(
+                AppState.instance().snapshotJson(),
+                playerId -> PlayerStatus.isGameAStatus(AppState.loginService().statusOf(playerId))
+        );
     }
 
     public static void broadcastPokerTable(int tableId) {
-        String message = AppState.snapshotJson();
-        sendToMatchingSessions(message, playerId -> AppState.POKER_ROOM_SERVICE.tableIdForPlayer(playerId) == tableId);
+        broadcastToMatching(
+                AppState.instance().snapshotJson(),
+                playerId -> AppState.pokerRoomService().tableIdForPlayer(playerId) == tableId
+        );
     }
+
+    // ---- Private helpers ----------------------------------------------------
 
     private static void pingOpenSessions() {
         for (Session session : SESSIONS) {
@@ -127,8 +155,8 @@ public class RealtimeEndpoint {
                 continue;
             }
 
-            int missedPongs = MISSED_PONGS.merge(session, 1, Integer::sum);
-            if (missedPongs > MAX_MISSED_PONGS) {
+            int missed = MISSED_PONGS.merge(session, 1, Integer::sum);
+            if (missed > MAX_MISSED_PONGS) {
                 closeSession(session, "websocket heartbeat timeout");
                 removeSession(session);
                 continue;
@@ -136,14 +164,14 @@ public class RealtimeEndpoint {
 
             try {
                 session.getBasicRemote().sendPing(PING_PAYLOAD.asReadOnlyBuffer());
-            } catch (IOException | RuntimeException exception) {
+            } catch (IOException | RuntimeException e) {
                 closeSession(session, "websocket heartbeat failed");
                 removeSession(session);
             }
         }
     }
 
-    private static void sendToMatchingSessions(String message, PlayerMatcher matcher) {
+    private static void broadcastToMatching(String message, PlayerMatcher matcher) {
         for (Session session : SESSIONS) {
             if (!session.isOpen()) {
                 removeSession(session);
@@ -151,28 +179,24 @@ public class RealtimeEndpoint {
             }
             String playerId = SESSION_PLAYERS.get(session);
             if (playerId != null && matcher.matches(playerId)) {
-                session.getAsyncRemote().sendText(message);
+                try {
+                    session.getAsyncRemote().sendText(message);
+                } catch (RuntimeException e) {
+                    log.warn("Failed to send message to {}", session.getId(), e);
+                }
             }
         }
     }
 
-    private static boolean isPokerPlayer(String playerId) {
-        return PlayerStatus.isGameAStatus(AppState.LOGIN_SERVICE.statusOf(playerId));
-    }
-
     private static String authenticatedPlayerId(Session session) {
         String playerId = parameter(session, "id");
-        String token = token(session);
+        String token = parameter(session, "token");
         try {
-            AppState.LOGIN_SERVICE.validateToken(playerId, token);
-            return AppState.LOGIN_SERVICE.normalizePlayerId(playerId);
-        } catch (IllegalArgumentException | IllegalStateException exception) {
+            AppState.loginService().validateToken(playerId, token);
+            return AppState.loginService().normalizePlayerId(playerId);
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return "";
         }
-    }
-
-    private static String token(Session session) {
-        return parameter(session, "token");
     }
 
     private static String parameter(Session session, String name) {
@@ -186,10 +210,7 @@ public class RealtimeEndpoint {
     private static void closeSession(Session session, String reason) {
         try {
             if (session != null && session.isOpen()) {
-                session.close(new CloseReason(
-                        CloseReason.CloseCodes.GOING_AWAY,
-                        reason
-                ));
+                session.close(new CloseReason(CloseReason.CloseCodes.GOING_AWAY, reason));
             }
         } catch (IOException ignored) {
             // The connection is already unusable; removal from local state is enough.

@@ -1,6 +1,7 @@
 package com.zqyyz.ranksystem;
 
 import com.zqyyz.ranksystem.model.PlayerSession;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
+@Service
 public class LoginService {
     private final Map<String, PlayerSession> onlinePlayers = new ConcurrentHashMap<>();
     private final Map<String, String> loginTokens = new ConcurrentHashMap<>();

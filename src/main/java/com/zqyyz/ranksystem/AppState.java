@@ -6,65 +6,66 @@ import com.zqyyz.ranksystem.model.PlayerSession;
 import com.zqyyz.ranksystem.model.PokerRoomPlayer;
 import com.zqyyz.ranksystem.model.PokerRoomSnapshot;
 import com.zqyyz.ranksystem.model.PokerTableSummary;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class AppState {
-    public static final long IDLE_TIMEOUT_MILLIS = 5L * 60L * 1000L;
-    public static final LoginService LOGIN_SERVICE = new LoginService();
-    public static final PokerRoomService POKER_ROOM_SERVICE = new PokerRoomService(LOGIN_SERVICE);
-    private static final ObjectMapper JSON = new ObjectMapper();
+@Component
+public class AppState {
 
-    private AppState() {
+    public static final long IDLE_TIMEOUT_MILLIS = 5L * 60L * 1000L;
+
+    private final ObjectMapper json = new ObjectMapper();
+    private final LoginService loginService;
+    private final PokerRoomService pokerRoomService;
+    private static final ObjectMapper STATIC_JSON = new ObjectMapper();
+
+    public AppState(LoginService loginService, PokerRoomService pokerRoomService) {
+        this.loginService = loginService;
+        this.pokerRoomService = pokerRoomService;
     }
 
-    public static String snapshotJson() {
+    // ---- Instance methods used by controllers -------------------------------
+
+    public String snapshotJson() {
         expireIdlePlayers();
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("type", "snapshot");
-        snapshot.put("players", playersView(LOGIN_SERVICE.getOnlinePlayers()));
-        snapshot.put("pokerTables", Map.of("tables", pokerTablesView(POKER_ROOM_SERVICE.tableSummaries())));
-        snapshot.put("pokerRoom", pokerRoomView(POKER_ROOM_SERVICE.snapshot(), ""));
-        return json(snapshot);
+        snapshot.put("players", playersView(loginService.getOnlinePlayers()));
+        snapshot.put("pokerTables", Map.of("tables", pokerTablesView(pokerRoomService.tableSummaries())));
+        snapshot.put("pokerRoom", pokerRoomView(pokerRoomService.snapshot(), ""));
+        return toJsonInternal(snapshot);
     }
 
-    public static String playersJson(List<PlayerSession> players) {
-        return json(Map.of("players", playersView(players)));
+    public String playersJson(List<PlayerSession> players) {
+        return toJsonInternal(Map.of("players", playersView(players)));
     }
 
-    public static String successJson() {
-        return json(Map.of("success", true));
+    public String successJson() {
+        return toJsonInternal(Map.of("success", true));
     }
 
-    public static String loginSuccessJson(String token) {
+    public String loginSuccessJson(String token) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("token", token);
-        return json(response);
+        return toJsonInternal(response);
     }
 
-    public static String errorJson(String message) {
+    public String errorJson(String message) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", false);
         response.put("message", message);
-        return json(response);
+        return toJsonInternal(response);
     }
 
-    public static String json(Object value) {
-        try {
-            return JSON.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("failed to serialize json", exception);
-        }
-    }
-
-    public static boolean expireIdlePlayers() {
-        return !LOGIN_SERVICE.expireIdlePlayers(
+    public boolean expireIdlePlayers() {
+        return !loginService.expireIdlePlayers(
                 IDLE_TIMEOUT_MILLIS,
-                POKER_ROOM_SERVICE::isPlayerInAnyTable
+                pokerRoomService::isPlayerInAnyTable
         ).isEmpty();
     }
 
@@ -73,8 +74,32 @@ public final class AppState {
     }
 
     public static String pokerRoomJson(PokerRoomSnapshot room, String viewerId) {
-        return json(pokerRoomView(room, viewerId));
+        return toJsonStatic(pokerRoomView(room, viewerId));
     }
+
+    public String pokerTablesJson(List<PokerTableSummary> tables) {
+        return toJsonInternal(Map.of("tables", pokerTablesView(tables)));
+    }
+
+    // ---- Internal JSON serialization ----------------------------------------
+
+    private String toJsonInternal(Object value) {
+        try {
+            return json.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("failed to serialize json", exception);
+        }
+    }
+
+    private static String toJsonStatic(Object value) {
+        try {
+            return STATIC_JSON.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("failed to serialize json", exception);
+        }
+    }
+
+    // ---- View builders ------------------------------------------------------
 
     private static Map<String, Object> pokerRoomView(PokerRoomSnapshot room, String viewerId) {
         String normalizedViewerId = viewerId == null ? "" : viewerId.trim();
@@ -163,11 +188,7 @@ public final class AppState {
         );
     }
 
-    public static String pokerTablesJson(List<PokerTableSummary> tables) {
-        return json(Map.of("tables", pokerTablesView(tables)));
-    }
-
-    private static List<Map<String, Object>> pokerTablesView(List<PokerTableSummary> tables) {
+    private List<Map<String, Object>> pokerTablesView(List<PokerTableSummary> tables) {
         List<Map<String, Object>> tableViews = new ArrayList<>();
         for (PokerTableSummary table : tables) {
             Map<String, Object> tableView = new LinkedHashMap<>();
@@ -182,7 +203,7 @@ public final class AppState {
         return tableViews;
     }
 
-    private static List<Map<String, Object>> tablePlayerDetailsView(List<PokerRoomPlayer> players) {
+    private List<Map<String, Object>> tablePlayerDetailsView(List<PokerRoomPlayer> players) {
         List<Map<String, Object>> playerViews = new ArrayList<>();
         for (PokerRoomPlayer player : players) {
             Map<String, Object> playerView = new LinkedHashMap<>();
@@ -193,15 +214,37 @@ public final class AppState {
         return playerViews;
     }
 
-    private static List<Map<String, Object>> playersView(List<PlayerSession> players) {
+    private List<Map<String, Object>> playersView(List<PlayerSession> players) {
         List<Map<String, Object>> playerViews = new ArrayList<>();
         for (PlayerSession player : players) {
             Map<String, Object> playerView = new LinkedHashMap<>();
             playerView.put("id", player.playerId());
             playerView.put("status", player.status());
-            playerView.put("tableId", POKER_ROOM_SERVICE.tableIdForPlayer(player.playerId()));
+            playerView.put("tableId", pokerRoomService.tableIdForPlayer(player.playerId()));
             playerViews.add(playerView);
         }
         return playerViews;
+    }
+
+    // ---- Static accessors for backward compatibility -------------------------
+
+    /** Get the LoginService instance from Spring context. */
+    public static LoginService loginService() {
+        return SpringContextHolder.getBean(LoginService.class);
+    }
+
+    /** Get the PokerRoomService instance from Spring context. */
+    public static PokerRoomService pokerRoomService() {
+        return SpringContextHolder.getBean(PokerRoomService.class);
+    }
+
+    /** Get the AppState instance from Spring context. */
+    public static AppState instance() {
+        return SpringContextHolder.getBean(AppState.class);
+    }
+
+    /** Static JSON serialization for use by non-Spring classes (e.g., RealtimeEndpoint). */
+    public static String json(Object value) {
+        return instance().toJsonInternal(value);
     }
 }

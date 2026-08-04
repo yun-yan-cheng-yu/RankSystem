@@ -7,12 +7,15 @@ import com.zqyyz.ranksystem.model.PokerRoomPlayer;
 import com.zqyyz.ranksystem.model.PokerRoomSnapshot;
 import com.zqyyz.ranksystem.model.PokerTableSummary;
 
+import org.springframework.stereotype.Service;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@Service
 public class PokerRoomService {
     private static final int TABLE_COUNT = 10;
     private static final int MAX_PLAYERS = 10;

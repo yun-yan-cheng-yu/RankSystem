@@ -1,48 +1,29 @@
 package com.zqyyz.ranksystem;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
-public final class OnlinePlayerCleaner {
-    private static final long CLEAN_INTERVAL_SECONDS = 30L;
-    private static ScheduledExecutorService executor;
-    private static ScheduledFuture<?> task;
+/**
+ * Replaces the old scheduled executor-based cleaner.
+ * Uses Spring's @Scheduled annotation instead of manual ScheduledExecutorService.
+ */
+@Component
+public class OnlinePlayerCleaner {
 
-    private OnlinePlayerCleaner() {
+    private static final Logger log = LoggerFactory.getLogger(OnlinePlayerCleaner.class);
+    
+    private final AppState appState;
+
+    public OnlinePlayerCleaner(AppState appState) {
+        this.appState = appState;
     }
 
-    public static synchronized void start() {
-        if (task != null && !task.isCancelled()) {
-            return;
-        }
-        executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "ranksystem-online-cleaner");
-            thread.setDaemon(true);
-            return thread;
-        });
-        task = executor.scheduleAtFixedRate(
-                OnlinePlayerCleaner::cleanExpiredPlayers,
-                CLEAN_INTERVAL_SECONDS,
-                CLEAN_INTERVAL_SECONDS,
-                TimeUnit.SECONDS
-        );
-    }
-
-    public static synchronized void stop() {
-        if (task != null) {
-            task.cancel(true);
-            task = null;
-        }
-        if (executor != null) {
-            executor.shutdownNow();
-            executor = null;
-        }
-    }
-
-    private static void cleanExpiredPlayers() {
-        if (AppState.expireIdlePlayers()) {
+    // Clean every 30 seconds (same as original interval)
+    @Scheduled(fixedRate = 30000)
+    public void cleanExpiredPlayers() {
+        if (appState.expireIdlePlayers()) {
             RealtimeEndpoint.broadcastGlobalLobby();
         }
     }
