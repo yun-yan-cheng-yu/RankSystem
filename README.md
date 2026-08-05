@@ -23,7 +23,7 @@ RankSystem 是一个基于 Java + Spring Boot 的 Web Demo 项目。当前主要
 
 ## 技术栈
 
-- Java 17
+- Java 21
 - Maven
 - Spring Boot 3.2.5
 - Spring MVC（REST 接口）
