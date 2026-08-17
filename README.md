@@ -147,6 +147,8 @@ POST /poker-room/next
 POST /poker-room/leave
 POST /poker-room/fold
 POST /poker-room/bet
+GET  /grpc/math/add?a=5&b=3   # 通过 gRPC 调用 Go MathUtil 服务端
+GET  /grpc/math/sub?a=5&b=3
 ```
 
 WebSocket：
@@ -154,6 +156,11 @@ WebSocket：
 ```text
 ws://localhost:8081/ws?id=玩家ID&token=登录token
 ```
+
+gRPC 客户端：RankSystem 通过 gRPC 调用 Go 工程（`G:\program\grpc`）提供的 `MathUtil` 服务。
+服务端地址在 `application.properties` 的 `grpc.server.host` / `grpc.server.port`（默认 `127.0.0.1:9100`），
+协议定义只存在于 `G:\program\grpc_proto\math.proto`（三个工程同级），构建时由 Maven
+protobuf 插件直接从 `../grpc_proto` 生成 Java 桩代码，仓库内不保存任何 proto 副本或生成代码。
 
 如果通过 HTTPS 访问，WebSocket 地址应使用 `wss://`。
 
