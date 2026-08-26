@@ -2,7 +2,7 @@
 
 RankSystem 是一个基于 Java + Spring Boot 的 Web Demo 项目。当前主要功能是一个内存版德州扑克房间系统，用来演示登录、房间、桌子、实时广播、押注、摊牌和积分结算流程。
 
-数据暂时全部保存在内存中，没有接入数据库。应用重启后，在线玩家、房间状态、牌局状态和积分都会重置。
+在线玩家、房间状态、牌局状态和积分都保存在内存中，应用重启后重置。项目内置了一个独立的 RocksDB 系统（存储层 + 管理接口），但目前**未接入业务数据**，后续需要持久化时可直接启用。
 
 ## 当前功能
 
@@ -18,6 +18,7 @@ RankSystem 是一个基于 Java + Spring Boot 的 Web Demo 项目。当前主要
 - 心跳机制：前端定时 POST `/heartbeat`，WebSocket 连接使用服务端 ping 和客户端 pong 检测断线。
 - 游戏流程：押底、发牌、押注、跟注、弃牌、公共牌推进、最终比牌。
 - 积分系统：押底和押注会扣积分，赢家获得底池。
+- RocksDB 系统：独立的 RocksDB 存储层（`rocksdb` 包）和 `/rocksdb` 管理接口，当前未接入业务数据，游戏数据仍全内存。
 - 摊牌展示：最后比牌阶段展示每位玩家的底牌、最终牌型和组成牌型的 5 张成牌。
 - 牌型模型：内部使用 `PlayingCard`、`CardRank`、`CardSuit` 表达扑克牌，使用 `HandCategory` 表示牌型强度和展示名，`HandValue` 统一比较牌型和关键点数。
 
@@ -29,6 +30,7 @@ RankSystem 是一个基于 Java + Spring Boot 的 Web Demo 项目。当前主要
 - Spring MVC（REST 接口）
 - Jakarta WebSocket（JSR-356）+ ServerEndpointExporter
 - Jackson JSON
+- RocksDB（rocksdbjni 10.2.1，内嵌 KV 存储，自带各平台 native 库）
 - JUnit 5
 
 迁移过程与前后对比见 [SPRING_BOOT_MIGRATION.md](SPRING_BOOT_MIGRATION.md)。
@@ -57,6 +59,12 @@ src/main/java/com/zqyyz/ranksystem/
     PlayerController.java    # /players、/state
     PokerRoomController.java # /poker-room 系列接口
     PokerTableController.java# /poker-tables
+    RocksDBController.java   # /rocksdb 系列接口（状态、统计、积分、历史）
+  rocksdb/
+    AGENTS.md                # RocksDB 包 AI 导读
+    RocksDBStore.java        # RocksDB 实例持有者：生命周期 + 底层 get/put/delete/遍历/刷盘
+    RocksDBScoreStore.java   # 玩家积分存储（key: score:<playerId>，当前未接入业务）
+    RocksDBHandHistoryStore.java  # 结算历史存储（key: hand:<seq>，当前未接入业务）
 src/main/java/com/zqyyz/ranksystem/model/
   AGENTS.md                 # 模型包 AI 导读
   CardRank.java              # 扑克牌点数枚举
@@ -68,16 +76,21 @@ src/main/java/com/zqyyz/ranksystem/model/
   PokerRoomPlayer.java       # 房间玩家数据
   PokerRoomSnapshot.java     # 房间快照
   PokerTableSummary.java     # 桌子摘要
+  SettlementRecord.java      # 一局结束时的结算记录（RocksDB 结算历史的数据模型，当前未接入业务）
 src/main/java/com/zqyyz/ranksystem/util/
   AGENTS.md                 # 工具包 AI 导读
   CollectionUtil.java        # 集合字典序比较工具
 src/main/resources/
-  application.properties     # 端口、静态资源配置
+  application.properties     # 端口、静态资源配置、rocksdb.path（数据库目录）
   static/index.html          # 前端页面
 cards_54/                    # 备用扑克牌图片素材；当前前端没有引用
 src/test/java/com/zqyyz/ranksystem/
   LoginServiceTest.java
   PokerRoomServiceTest.java
+  rocksdb/
+    RocksDBStoreTest.java                # RocksDB 底层读写、前缀遍历、重开不丢
+    RocksDBScoreStoreTest.java           # 积分存储测试
+    RocksDBHandHistoryStoreTest.java     # 结算历史测试
 ```
 
 ## 图片资源说明
@@ -149,6 +162,13 @@ POST /poker-room/fold
 POST /poker-room/bet
 GET  /grpc/math/add?a=5&b=3   # 通过 gRPC 调用 Go MathUtil 服务端
 GET  /grpc/math/sub?a=5&b=3
+GET  /rocksdb/status          # RocksDB 开关状态、路径、key 数、结算记录数
+GET  /rocksdb/stats           # RocksDB 内置统计信息
+GET  /rocksdb/keys?limit=500  # 数据库中的 key 列表
+GET  /rocksdb/score?id=player # 查询某玩家持久化积分
+GET  /rocksdb/scores          # 全部玩家积分榜（积分从高到低）
+GET  /rocksdb/history?limit=20# 最近 N 局结算记录（新的在前）
+POST /rocksdb/flush           # 手动强制刷盘
 ```
 
 WebSocket：
@@ -185,6 +205,39 @@ protobuf 插件直接从 `../grpc_proto` 生成 Java 桩代码，仓库内不保
 - 德州扑克大厅广播：所有德州扑克模块内玩家，包括德州扑克大厅、桌面和游戏中。
 - 桌面内广播：指定桌子的玩家。
 
+## RocksDB 系统
+
+项目内置一个独立的 [RocksDB](https://rocksdb.org/)（`org.rocksdb:rocksdbjni`）系统，不依赖外部数据库服务。
+用法是原生的程序化配置：`RocksDBStore` 直接用 `Options` 打开数据库（目录默认 `data/rocksdb`，可用 `rocksdb.path` 配置），
+业务数据用可读 key 前缀区分命名空间，不走任何配置文件。
+
+> **当前状态：系统已就绪，但暂未接入业务。** 游戏数据（在线玩家、房间、牌局、积分）仍全部保存在内存中，
+> 重启后重置。RocksDB 此刻只作为基础设施存在，不会写入任何真实业务数据（`/rocksdb` 接口查询到的数据为空）。
+> 后续需要持久化时，在 `PokerRoomService` 的入座/结算/离桌处调用
+> `RocksDBScoreStore` 与 `RocksDBHandHistoryStore` 即可，存储层已经就绪。
+
+### 存储布局（预留）
+
+| key 前缀 | 内容 | 设计写入时机 |
+| --- | --- | --- |
+| `score:<playerId>` | 玩家积分（十进制字符串） | 入座时读取；离桌、每局结算时写回 |
+| `hand:seq` | 结算记录自增计数器 | 每局结算时 |
+| `hand:<seq>` | 一局结算记录（JSON） | 每局结算时 |
+
+### 管理接口
+
+```text
+GET  /rocksdb/status          # 开关状态、路径、key 数、结算记录数
+GET  /rocksdb/stats           # RocksDB 内置统计（memtable、block cache 等）
+GET  /rocksdb/keys?limit=500  # key 列表（按字典序）
+GET  /rocksdb/score?id=xxx    # 某玩家积分（当前恒为 0，未接入）
+GET  /rocksdb/scores          # 积分榜（当前为空，未接入）
+GET  /rocksdb/history?limit=20# 最近结算记录（当前为空，未接入）
+POST /rocksdb/flush           # 手动刷盘
+```
+
+每次写入使用同步刷盘（`WriteOptions.setSync(true)`），Demo 写入量下开销可忽略；正常情况下无需手动调用 `/rocksdb/flush`。
+
 ## 牌型比较
 
 德州扑克牌型计算在 `PokerRoomService` 中完成：
@@ -217,6 +270,8 @@ mvn test
 - 正式德州扑克牌型比较
 - 摊牌时底牌、牌型和成牌展示数据
 - 积分扣除和底池结算
+- RocksDB 底层读写、前缀遍历、重新打开目录后数据不丢
+- 玩家积分存储与结算历史记录的读写、重开不丢
 
 ## AI 导读文件
 
@@ -225,6 +280,7 @@ mvn test
 ```text
 src/main/java/com/zqyyz/ranksystem/AGENTS.md
 src/main/java/com/zqyyz/ranksystem/model/AGENTS.md
+src/main/java/com/zqyyz/ranksystem/rocksdb/AGENTS.md
 src/main/java/com/zqyyz/ranksystem/servlet/AGENTS.md
 src/main/java/com/zqyyz/ranksystem/util/AGENTS.md
 ```
@@ -262,7 +318,8 @@ ngrok 会生成一个公网地址，把这个地址后面加上 `/RankSystem/` �
 
 ## 当前限制
 
-- 没有数据库，所有数据都在内存里。
+- 所有游戏数据（在线玩家、房间、牌局、积分）都在内存里，重启重置；RocksDB 系统已就绪但暂未接入业务数据。
 - 没有真实账号系统，玩家 ID 由前端手动输入。
 - 没有筹码余额上限校验，积分可以为负数。
+- RocksDB 是单实例内嵌存储，不适合多进程/多机部署；`/rocksdb` 管理接口暂未加登录鉴权。
 - 游戏规则仍是 Demo 版本，适合学习和演示，不适合作为正式线上游戏。

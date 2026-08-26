@@ -35,7 +35,8 @@
 
 ## 修改注意
 
-- 内存数据没有数据库持久化，Tomcat 重启会重置玩家、桌子、牌局和积分。
+- 所有游戏数据（在线玩家、桌子、牌局、积分）都在内存里，Tomcat 重启会重置；`rocksdb` 包的 RocksDB 系统已就绪但**暂未接入业务**，不会写入真实数据。
+- 后续要接入持久化时，在 `PokerRoomService` 的入座/结算/离桌处调用 `RocksDBScoreStore` 与 `RocksDBHandHistoryStore`，并同步更新 `rocksdb/AGENTS.md` 的状态说明。
 - 登录 token 是单端机制，后登录会挤掉先登录。
 - 心跳和业务活跃时间语义不同：`/heartbeat` 只刷新心跳，业务操作刷新 `lastActionAtMillis`。
 - 牌型比较对象在 `model/HandCategory.java` 和 `model/HandValue.java`，不要再在 `PokerRoomService` 里新增内部牌型模型。

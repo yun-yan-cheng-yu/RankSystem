@@ -43,6 +43,13 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- RocksDB 嵌入式 KV 存储（自带各平台 native 库，用于玩家积分和结算历史持久化） -->
+        <dependency>
+            <groupId>org.rocksdb</groupId>
+            <artifactId>rocksdbjni</artifactId>
+            <version>10.2.1</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

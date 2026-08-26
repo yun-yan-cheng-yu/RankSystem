@@ -8,6 +8,7 @@
 - `PokerRoomPlayer.java`：桌内玩家数据，包括准备、底牌、弃牌、下注、积分等。
 - `PokerRoomSnapshot.java`：单张桌子的完整快照。
 - `PokerTableSummary.java`：桌子大厅需要展示的桌子摘要。
+- `SettlementRecord.java`：一局结束时的结算记录（时间、桌子、赢家、牌型、底池、每人最终积分），是 `rocksdb` 包结算历史存储的数据模型，当前未接入业务。
 - `CardRank.java`：扑克牌点数枚举，包含点数数值和展示文本。
 - `CardSuit.java`：扑克牌花色枚举，包含花色符号。
 - `PlayingCard.java`：后端内部使用的扑克牌模型，可从 `"A♠"`、`"10♦"` 等字符串解析，也可转回字符串。

@@ -1,6 +1,9 @@
 package com.zqyyz.ranksystem;
 
 import com.zqyyz.ranksystem.model.PlayerSession;
+import com.zqyyz.ranksystem.rocksdb.user.UserInfo;
+import com.zqyyz.ranksystem.rocksdb.user.RocksDBUserStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -17,6 +20,18 @@ public class LoginService {
     private final Map<String, Long> lastHeartbeatAtMillis = new ConcurrentHashMap<>();
     private final Map<String, Long> lastActionAtMillis = new ConcurrentHashMap<>();
 
+    private final RocksDBUserStore userStore;
+
+    /** 测试直接使用：不注入用户存储（登录不写库）。 */
+    public LoginService() {
+        this(null);
+    }
+
+    @Autowired
+    public LoginService(RocksDBUserStore userStore) {
+        this.userStore = userStore;
+    }
+
     public String login(String playerId) {
         String normalizedPlayerId = normalizePlayerId(playerId);
         String status = onlinePlayers.getOrDefault(
@@ -29,6 +44,11 @@ public class LoginService {
         long nowMillis = System.currentTimeMillis();
         lastHeartbeatAtMillis.put(normalizedPlayerId, nowMillis);
         lastActionAtMillis.put(normalizedPlayerId, nowMillis);
+        UserInfo existing = userStore.loadUser(normalizedPlayerId);
+        UserInfo user = existing == null
+                ? new UserInfo(normalizedPlayerId, nowMillis, nowMillis)
+                : new UserInfo(normalizedPlayerId, existing.registerTimeMillis(), nowMillis);
+        userStore.saveUser(user);
         return token;
     }
 

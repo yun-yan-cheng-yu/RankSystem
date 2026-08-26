@@ -27,3 +27,6 @@ hs_err_pid*
 replay_pid*
 /.idea/*
 /ranksystem.iml
+
+# RocksDB 运行数据目录（应用启动时自动创建）
+/data/
