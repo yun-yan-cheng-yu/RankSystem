@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zqyyz.ranksystem.mapper.UserMapper">
+
+    <!-- 结果映射：将数据库字段映射到Java实体属性 -->
+    <resultMap id="BaseResultMap" type="user">
+        <id property="id" column="id"/>
+        <result property="userName" column="user_name"/>
+        <result property="password" column="password"/>
+        <result property="age" column="age"/>
+        <result property="email" column="email"/>
+    </resultMap>
+
+    <!-- 通用查询列（复用SQL片段） -->
+    <sql id="Base_Column_List">
+        id, user_name, password, age, email
+    </sql>
+
+    <!-- 1. 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user
+        WHERE id = #{id}
+    </select>
+
+    <!-- 2. 查询所有用户 -->
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user
+        ORDER BY id DESC
+    </select>
+
+    <!-- 3. 新增用户（主键自动回填到实体对象） -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user (user_name, password, age, email)
+        VALUES (#{userName}, #{password}, #{age}, #{email})
+    </insert>
+
+    <!-- 4. 更新用户 -->
+    <update id="update">
+        UPDATE user
+        SET user_name = #{userName},
+        password = #{password},
+        age = #{age},
+        email = #{email}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 5. 根据ID删除 -->
+    <delete id="deleteById">
+        DELETE FROM user WHERE id = #{id}
+    </delete>
+
+    <!-- 6. 根据用户名模糊查询 -->
+    <select id="selectByUserName" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user
+        WHERE user_name LIKE CONCAT('%', #{userName}, '%')
+    </select>
+
+    <!-- 7. 批量插入（使用foreach循环） -->
+    <insert id="batchInsert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user (user_name, password, age, email)
+        VALUES
+        <foreach collection="list" item="user" separator=",">
+            (#{user.userName}, #{user.password}, #{user.age}, #{user.email})
+        </foreach>
+    </insert>
+
+</mapper>
